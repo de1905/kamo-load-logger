@@ -15,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
 from app.services.importer import DataImporter
+from app.services.settings import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,10 @@ def start_scheduler():
         logger.warning("Scheduler already running")
         return
 
-    settings = get_settings()
     scheduler = AsyncIOScheduler()
 
-    # Determine trigger based on poll interval
-    interval = settings.poll_interval_minutes
+    # Get poll interval from settings service (DB > ENV > default)
+    interval = get_setting("poll_interval_minutes")
 
     if interval == 5:
         # Use cron trigger for exact 5-minute marks: 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55
@@ -99,6 +99,15 @@ def stop_scheduler():
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
         logger.info("Scheduler stopped")
+
+
+def restart_scheduler():
+    """Restart the scheduler with updated settings."""
+    global scheduler
+    logger.info("Restarting scheduler with new settings...")
+    stop_scheduler()
+    scheduler = None  # Reset so start_scheduler creates fresh instance
+    start_scheduler()
 
 
 async def trigger_manual_import():

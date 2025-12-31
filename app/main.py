@@ -13,7 +13,7 @@ from sqlalchemy import func
 
 from app import __version__
 from app.config import get_settings
-from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative
+from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative, Setting
 from app.scheduler import start_scheduler, stop_scheduler, import_job, get_next_run_time
 from app.services.importer import DataImporter
 from app.routers import status_router, load_router, substations_router, export_router
@@ -172,6 +172,19 @@ async def database_tables(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "version": __version__,
             "tables": tables,
+            "poll_interval": settings.poll_interval_minutes,
+        },
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Settings configuration page."""
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "version": __version__,
             "poll_interval": settings.poll_interval_minutes,
         },
     )

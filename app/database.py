@@ -99,6 +99,17 @@ class SubstationSnapshot(Base):
     )
 
 
+class Setting(Base):
+    """Application settings stored in database (overrides ENV defaults)."""
+
+    __tablename__ = "settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=True)
+    description = Column(String(255), nullable=True)
+    updated_at = Column(DateTime, default=now_central, onupdate=now_central)
+
+
 class ImportLog(Base):
     """Log of import operations."""
 

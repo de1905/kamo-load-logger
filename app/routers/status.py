@@ -20,7 +20,8 @@ from app.models import (
     CooperativeResponse,
 )
 from app.services.importer import DataImporter
-from app.scheduler import trigger_manual_import, get_next_run_time
+from app.services.settings import get_settings_service, CONFIGURABLE_SETTINGS
+from app.scheduler import trigger_manual_import, get_next_run_time, restart_scheduler
 
 router = APIRouter()
 
@@ -228,3 +229,85 @@ async def get_table_data(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/settings")
+async def get_all_settings(db: Session = Depends(get_db)):
+    """Get all configurable settings."""
+    service = get_settings_service(db)
+    return {
+        "settings": service.get_all(),
+    }
+
+
+@router.get("/settings/{key}")
+async def get_setting(key: str, db: Session = Depends(get_db)):
+    """Get a specific setting value."""
+    service = get_settings_service(db)
+    value = service.get(key)
+    if value is None:
+        raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
+    return {"key": key, "value": value}
+
+
+@router.put("/settings/{key}")
+async def update_setting(
+    key: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """Update a setting value."""
+    if "value" not in body:
+        raise HTTPException(status_code=400, detail="Missing 'value' in request body")
+
+    service = get_settings_service(db)
+    old_value = service.get(key)
+    success = service.set(key, body["value"])
+
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to update setting '{key}'")
+
+    # Restart scheduler if poll interval changed
+    if key == "poll_interval_minutes" and old_value != body["value"]:
+        restart_scheduler()
+
+    return {"key": key, "value": body["value"], "success": True}
+
+
+@router.post("/settings")
+async def update_multiple_settings(
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """Update multiple settings at once."""
+    if "settings" not in body:
+        raise HTTPException(status_code=400, detail="Missing 'settings' in request body")
+
+    service = get_settings_service(db)
+    old_poll_interval = service.get("poll_interval_minutes")
+
+    results = service.set_multiple(body["settings"])
+
+    # Restart scheduler if poll interval changed
+    new_poll_interval = service.get("poll_interval_minutes")
+    if old_poll_interval != new_poll_interval:
+        restart_scheduler()
+
+    return {"results": results}
+
+
+@router.delete("/settings/{key}")
+async def reset_setting(key: str, db: Session = Depends(get_db)):
+    """Reset a setting to its default value."""
+    service = get_settings_service(db)
+    old_value = service.get(key)
+    success = service.reset(key)
+
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to reset setting '{key}'")
+
+    # Restart scheduler if poll interval was reset
+    if key == "poll_interval_minutes":
+        restart_scheduler()
+
+    return {"key": key, "reset": True}
