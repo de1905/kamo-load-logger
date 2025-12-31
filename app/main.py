@@ -140,6 +140,43 @@ async def data_inspector(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/tables", response_class=HTMLResponse)
+async def database_tables(request: Request, db: Session = Depends(get_db)):
+    """Database tables inspector page."""
+    tables = [
+        {
+            "name": "cooperatives",
+            "description": "Cached cooperative/area list from KAMO API",
+            "count": db.query(func.count(Cooperative.id)).scalar() or 0,
+        },
+        {
+            "name": "load_data",
+            "description": "Historical hourly load data",
+            "count": db.query(func.count(LoadData.id)).scalar() or 0,
+        },
+        {
+            "name": "substation_snapshots",
+            "description": "Point-in-time substation snapshots",
+            "count": db.query(func.count(SubstationSnapshot.id)).scalar() or 0,
+        },
+        {
+            "name": "import_log",
+            "description": "Import operation history",
+            "count": db.query(func.count(ImportLog.id)).scalar() or 0,
+        },
+    ]
+
+    return templates.TemplateResponse(
+        "tables.html",
+        {
+            "request": request,
+            "version": __version__,
+            "tables": tables,
+            "poll_interval": settings.poll_interval_minutes,
+        },
+    )
+
+
 @app.get("/history", response_class=HTMLResponse)
 async def import_history(
     request: Request,

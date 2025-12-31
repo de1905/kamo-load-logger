@@ -142,3 +142,89 @@ async def get_next_import():
     return {
         "next_import": next_run.isoformat() if next_run else None,
     }
+
+
+@router.get("/tables")
+async def get_tables(db: Session = Depends(get_db)):
+    """Get list of database tables with row counts."""
+    tables = [
+        {
+            "name": "cooperatives",
+            "description": "Cached cooperative/area list from KAMO API",
+            "count": db.query(func.count(Cooperative.id)).scalar() or 0,
+        },
+        {
+            "name": "load_data",
+            "description": "Historical hourly load data",
+            "count": db.query(func.count(LoadData.id)).scalar() or 0,
+        },
+        {
+            "name": "substation_snapshots",
+            "description": "Point-in-time substation snapshots",
+            "count": db.query(func.count(SubstationSnapshot.id)).scalar() or 0,
+        },
+        {
+            "name": "import_log",
+            "description": "Import operation history",
+            "count": db.query(func.count(ImportLog.id)).scalar() or 0,
+        },
+    ]
+    return {"tables": tables}
+
+
+@router.get("/tables/{table_name}")
+async def get_table_data(
+    table_name: str,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    """Get data from a specific table with pagination."""
+    table_map = {
+        "cooperatives": Cooperative,
+        "load_data": LoadData,
+        "substation_snapshots": SubstationSnapshot,
+        "import_log": ImportLog,
+    }
+
+    if table_name not in table_map:
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+
+    model = table_map[table_name]
+    total = db.query(func.count(model.id)).scalar() or 0
+
+    # Get column names
+    columns = [c.name for c in model.__table__.columns]
+
+    # Query data with ordering
+    if table_name == "cooperatives":
+        query = db.query(model).order_by(model.id)
+    elif table_name == "load_data":
+        query = db.query(model).order_by(model.timestamp.desc())
+    elif table_name == "substation_snapshots":
+        query = db.query(model).order_by(model.snapshot_time.desc())
+    else:
+        query = db.query(model).order_by(model.id.desc())
+
+    rows = query.offset(offset).limit(limit).all()
+
+    # Convert to list of dicts
+    data = []
+    for row in rows:
+        row_dict = {}
+        for col in columns:
+            val = getattr(row, col)
+            # Convert datetime to string for JSON serialization
+            if isinstance(val, datetime):
+                val = val.isoformat()
+            row_dict[col] = val
+        data.append(row_dict)
+
+    return {
+        "table": table_name,
+        "columns": columns,
+        "data": data,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
