@@ -13,6 +13,7 @@
             <a href="/" class="nav-brand">KAMO Load Logger</a>
             <div class="nav-links">
                 <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+                <a href="/inspector" class="{% if request.url.path == '/inspector' %}active{% endif %}">Data Inspector</a>
                 <a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">Import History</a>
                 <a href="/docs" target="_blank">API Docs</a>
             </div>

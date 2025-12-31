@@ -124,6 +124,22 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/inspector", response_class=HTMLResponse)
+async def data_inspector(request: Request, db: Session = Depends(get_db)):
+    """Data inspector page - view load data like the iOS app."""
+    cooperatives = db.query(Cooperative).order_by(Cooperative.id).all()
+
+    return templates.TemplateResponse(
+        "inspector.html",
+        {
+            "request": request,
+            "version": __version__,
+            "cooperatives": cooperatives,
+            "poll_interval": settings.poll_interval_minutes,
+        },
+    )
+
+
 @app.get("/history", response_class=HTMLResponse)
 async def import_history(
     request: Request,

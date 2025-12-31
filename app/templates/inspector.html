@@ -1,0 +1,732 @@
+{% extends "base.html" %}
+
+{% block title %}Data Inspector - KAMO Load Logger{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<style>
+    /* iOS App-inspired styles */
+    .inspector-container {
+        max-width: 100%;
+    }
+
+    /* Area Selector - like iOS picker */
+    .area-selector {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .area-selector select {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 8px;
+        background: var(--gray-50);
+        cursor: pointer;
+    }
+
+    .area-selector select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Current Load Card - prominent display */
+    .current-load-card {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+
+    .current-load-value {
+        font-size: 3rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .current-load-unit {
+        font-size: 1.5rem;
+        font-weight: 400;
+        opacity: 0.9;
+    }
+
+    .current-load-label {
+        font-size: 0.875rem;
+        opacity: 0.8;
+        margin-top: 0.5rem;
+    }
+
+    .current-load-timestamp {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        margin-top: 0.25rem;
+    }
+
+    /* Chart Card */
+    .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .chart-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    .chart-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .chart-controls button {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+        border: 1px solid var(--gray-300);
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .chart-controls button.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .chart-controls button:hover:not(.active) {
+        background: var(--gray-100);
+    }
+
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+
+    /* Substations Section */
+    .substations-section {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .substations-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid var(--gray-200);
+        background: var(--gray-50);
+    }
+
+    .substations-title {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .substations-count {
+        font-size: 0.875rem;
+        color: var(--gray-500);
+    }
+
+    .substations-sort {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+    }
+
+    .substation-list {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .substation-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid var(--gray-100);
+        transition: background 0.2s;
+    }
+
+    .substation-row:hover {
+        background: var(--gray-50);
+    }
+
+    .substation-row:last-child {
+        border-bottom: none;
+    }
+
+    .substation-info {
+        flex: 1;
+    }
+
+    .substation-name {
+        font-weight: 500;
+        color: var(--gray-900);
+        margin-bottom: 0.25rem;
+    }
+
+    .substation-details {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.75rem;
+        color: var(--gray-500);
+    }
+
+    .substation-kw {
+        color: var(--primary);
+        font-weight: 500;
+    }
+
+    .substation-stats {
+        text-align: right;
+    }
+
+    .substation-pf {
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .substation-pf-label {
+        font-size: 0.625rem;
+        color: var(--gray-500);
+        text-transform: uppercase;
+    }
+
+    .pf-good { color: var(--success); }
+    .pf-warning { color: var(--warning); }
+    .pf-bad { color: var(--danger); }
+
+    /* Loading State */
+    .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+        color: var(--gray-500);
+    }
+
+    .loading-spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid var(--gray-200);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 0.75rem;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--gray-500);
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-card-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    .stat-card-label {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        margin-top: 0.25rem;
+    }
+
+    /* Region Pills */
+    .region-pills {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .region-pill {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+    }
+
+    .region-pill.kamo {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .region-pill.kamo.active {
+        background: #1d4ed8;
+        color: white;
+    }
+
+    .region-pill.mo {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .region-pill.mo.active {
+        background: #16a34a;
+        color: white;
+    }
+
+    .region-pill.ok {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .region-pill.ok.active {
+        background: #d97706;
+        color: white;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .current-load-value {
+            font-size: 2.5rem;
+        }
+
+        .chart-container {
+            height: 250px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="inspector-container">
+    <h1>Data Inspector</h1>
+
+    <!-- Region Quick Select -->
+    <div class="region-pills">
+        <button class="region-pill kamo" data-area-id="20" onclick="selectArea(20)">KAMO</button>
+        <button class="region-pill mo" data-area-id="18" onclick="selectArea(18)">Missouri</button>
+        <button class="region-pill ok" data-area-id="19" onclick="selectArea(19)">Oklahoma</button>
+    </div>
+
+    <!-- Area Selector -->
+    <div class="area-selector">
+        <select id="areaSelect" onchange="loadAreaData()">
+            <option value="">Select a Cooperative...</option>
+            {% for coop in cooperatives %}
+            <option value="{{ coop.id }}" {% if coop.id == selected_area %}selected{% endif %}>
+                {{ coop.abbreviation }} - {{ coop.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Current Load Display -->
+    <div class="current-load-card" id="currentLoadCard" style="display: none;">
+        <div class="current-load-value">
+            <span id="currentLoadValue">--</span>
+            <span class="current-load-unit" id="currentLoadUnit">MW</span>
+        </div>
+        <div class="current-load-label" id="currentLoadLabel">Current Load</div>
+        <div class="current-load-timestamp" id="currentLoadTimestamp">--</div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid" id="statsGrid" style="display: none;">
+        <div class="stat-card">
+            <div class="stat-card-value" id="statMin">--</div>
+            <div class="stat-card-label">24h Min</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" id="statMax">--</div>
+            <div class="stat-card-label">24h Max</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value" id="statAvg">--</div>
+            <div class="stat-card-label">24h Avg</div>
+        </div>
+    </div>
+
+    <!-- Load Chart -->
+    <div class="chart-card" id="chartCard" style="display: none;">
+        <div class="chart-header">
+            <span class="chart-title">Load History</span>
+            <div class="chart-controls">
+                <button class="active" data-hours="24" onclick="setChartRange(24)">24h</button>
+                <button data-hours="48" onclick="setChartRange(48)">48h</button>
+                <button data-hours="168" onclick="setChartRange(168)">7d</button>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="loadChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Substations -->
+    <div class="substations-section" id="substationsSection" style="display: none;">
+        <div class="substations-header">
+            <div>
+                <span class="substations-title">Substations</span>
+                <span class="substations-count" id="substationCount">(0)</span>
+            </div>
+            <select class="substations-sort" id="substationSort" onchange="sortSubstations()">
+                <option value="name">Sort by Name</option>
+                <option value="load" selected>Sort by Load</option>
+                <option value="pf">Sort by Power Factor</option>
+            </select>
+        </div>
+        <div class="substation-list" id="substationList">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Select an area to view substations
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">📊</div>
+        <h3>Select an Area</h3>
+        <p>Choose a cooperative or region above to view load data and substations.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let loadChart = null;
+    let currentAreaId = null;
+    let currentHours = 24;
+    let substationsData = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        const select = document.getElementById('areaSelect');
+        if (select.value) {
+            loadAreaData();
+        }
+    });
+
+    function selectArea(areaId) {
+        document.getElementById('areaSelect').value = areaId;
+
+        // Update pill states
+        document.querySelectorAll('.region-pill').forEach(pill => {
+            pill.classList.remove('active');
+            if (parseInt(pill.dataset.areaId) === areaId) {
+                pill.classList.add('active');
+            }
+        });
+
+        loadAreaData();
+    }
+
+    async function loadAreaData() {
+        const select = document.getElementById('areaSelect');
+        const areaId = select.value;
+
+        if (!areaId) {
+            hideAllSections();
+            document.getElementById('emptyState').style.display = 'block';
+            return;
+        }
+
+        currentAreaId = areaId;
+        document.getElementById('emptyState').style.display = 'none';
+
+        // Update region pills
+        document.querySelectorAll('.region-pill').forEach(pill => {
+            pill.classList.toggle('active', parseInt(pill.dataset.areaId) === parseInt(areaId));
+        });
+
+        // Load all data
+        await Promise.all([
+            loadCurrentLoad(areaId),
+            loadStats(areaId),
+            loadChartData(areaId, currentHours),
+            loadSubstations(areaId)
+        ]);
+    }
+
+    async function loadCurrentLoad(areaId) {
+        try {
+            const response = await fetch(`/api/load/current/${areaId}`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+
+            document.getElementById('currentLoadCard').style.display = 'block';
+
+            const loadMW = data.load_kw / 1000;
+            if (loadMW >= 1000) {
+                document.getElementById('currentLoadValue').textContent = (loadMW / 1000).toFixed(2);
+                document.getElementById('currentLoadUnit').textContent = 'GW';
+            } else {
+                document.getElementById('currentLoadValue').textContent = loadMW.toFixed(1);
+                document.getElementById('currentLoadUnit').textContent = 'MW';
+            }
+
+            document.getElementById('currentLoadLabel').textContent = data.area_name;
+            document.getElementById('currentLoadTimestamp').textContent =
+                new Date(data.timestamp).toLocaleString();
+        } catch (e) {
+            document.getElementById('currentLoadCard').style.display = 'none';
+        }
+    }
+
+    async function loadStats(areaId) {
+        try {
+            const response = await fetch(`/api/load/stats/${areaId}?hours=24`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+
+            document.getElementById('statsGrid').style.display = 'grid';
+            document.getElementById('statMin').textContent = formatLoad(data.min_kw);
+            document.getElementById('statMax').textContent = formatLoad(data.max_kw);
+            document.getElementById('statAvg').textContent = formatLoad(data.avg_kw);
+        } catch (e) {
+            document.getElementById('statsGrid').style.display = 'none';
+        }
+    }
+
+    async function loadChartData(areaId, hours) {
+        try {
+            const response = await fetch(`/api/load/history/${areaId}?hours=${hours}&limit=500`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+
+            if (data.data.length === 0) {
+                document.getElementById('chartCard').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('chartCard').style.display = 'block';
+
+            const labels = data.data.map(d => new Date(d.timestamp));
+            const values = data.data.map(d => d.load_kw / 1000); // Convert to MW
+
+            if (loadChart) {
+                loadChart.destroy();
+            }
+
+            const ctx = document.getElementById('loadChart').getContext('2d');
+            loadChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Load (MW)',
+                        data: values,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.y.toFixed(1)} MW`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                displayFormats: {
+                                    hour: 'MMM d, ha'
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(0) + ' MW';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            document.getElementById('chartCard').style.display = 'none';
+        }
+    }
+
+    async function loadSubstations(areaId) {
+        const section = document.getElementById('substationsSection');
+        const list = document.getElementById('substationList');
+
+        // Aggregates (18, 19, 20) don't have substations
+        if ([18, 19, 20].includes(parseInt(areaId))) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        list.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Loading substations...</div>';
+
+        try {
+            const response = await fetch(`/api/substations/current/${areaId}`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+            substationsData = data.substations;
+
+            document.getElementById('substationCount').textContent = `(${substationsData.length})`;
+            sortSubstations();
+        } catch (e) {
+            list.innerHTML = '<div class="empty-state"><p>No substation data available</p></div>';
+        }
+    }
+
+    function sortSubstations() {
+        const sortBy = document.getElementById('substationSort').value;
+        const list = document.getElementById('substationList');
+
+        let sorted = [...substationsData];
+
+        switch (sortBy) {
+            case 'name':
+                sorted.sort((a, b) => a.substation_name.localeCompare(b.substation_name));
+                break;
+            case 'load':
+                sorted.sort((a, b) => b.kw - a.kw);
+                break;
+            case 'pf':
+                sorted.sort((a, b) => Math.abs(b.pf) - Math.abs(a.pf));
+                break;
+        }
+
+        list.innerHTML = sorted.map(sub => renderSubstationRow(sub)).join('');
+    }
+
+    function renderSubstationRow(sub) {
+        const pf = Math.abs(sub.pf);
+        let pfClass = 'pf-good';
+        if (pf < 0.85) pfClass = 'pf-bad';
+        else if (pf < 0.95) pfClass = 'pf-warning';
+
+        return `
+            <div class="substation-row">
+                <div class="substation-info">
+                    <div class="substation-name">${sub.substation_name}</div>
+                    <div class="substation-details">
+                        <span class="substation-kw">${formatLoad(sub.kw)}</span>
+                        <span>${sub.kvar.toFixed(0)} kVAR</span>
+                    </div>
+                </div>
+                <div class="substation-stats">
+                    <div class="substation-pf ${pfClass}">${pf.toFixed(2)}</div>
+                    <div class="substation-pf-label">PF</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function setChartRange(hours) {
+        currentHours = hours;
+
+        // Update button states
+        document.querySelectorAll('.chart-controls button').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.hours) === hours);
+        });
+
+        if (currentAreaId) {
+            loadChartData(currentAreaId, hours);
+        }
+    }
+
+    function formatLoad(kw) {
+        if (!kw) return '--';
+        if (kw >= 1000000) {
+            return (kw / 1000000).toFixed(2) + ' GW';
+        } else if (kw >= 1000) {
+            return (kw / 1000).toFixed(1) + ' MW';
+        }
+        return kw.toFixed(0) + ' kW';
+    }
+
+    function hideAllSections() {
+        document.getElementById('currentLoadCard').style.display = 'none';
+        document.getElementById('statsGrid').style.display = 'none';
+        document.getElementById('chartCard').style.display = 'none';
+        document.getElementById('substationsSection').style.display = 'none';
+    }
+</script>
+{% endblock %}
