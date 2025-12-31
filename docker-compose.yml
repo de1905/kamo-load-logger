@@ -12,7 +12,7 @@ services:
     environment:
       - TZ=${TZ:-America/Chicago}
       - API_KEY=${API_KEY}
-      - POLL_INTERVAL_MINUTES=${POLL_INTERVAL_MINUTES:-30}
+      - POLL_INTERVAL_MINUTES=${POLL_INTERVAL_MINUTES:-5}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # SMTP Settings (optional)
       - SMTP_HOST=${SMTP_HOST:-}

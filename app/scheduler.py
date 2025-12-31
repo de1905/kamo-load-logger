@@ -1,8 +1,16 @@
-"""APScheduler setup for periodic data imports."""
+"""APScheduler setup for periodic data imports.
+
+Polling Strategy:
+- KAMO API updates substation data approximately every 3 minutes
+- We poll every 5 minutes for good resolution without excessive API load
+- Scheduler runs at even 5-minute marks (0, 5, 10, 15... minutes of each hour)
+- Timestamps are standardized to these marks for consistent data
+"""
 
 import logging
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
@@ -47,10 +55,34 @@ def start_scheduler():
     settings = get_settings()
     scheduler = AsyncIOScheduler()
 
+    # Determine trigger based on poll interval
+    interval = settings.poll_interval_minutes
+
+    if interval == 5:
+        # Use cron trigger for exact 5-minute marks: 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55
+        trigger = CronTrigger(minute="0,5,10,15,20,25,30,35,40,45,50,55")
+        trigger_desc = "every 5 minutes at :00, :05, :10..."
+    elif interval == 10:
+        # Every 10 minutes
+        trigger = CronTrigger(minute="0,10,20,30,40,50")
+        trigger_desc = "every 10 minutes at :00, :10, :20..."
+    elif interval == 15:
+        # Every 15 minutes
+        trigger = CronTrigger(minute="0,15,30,45")
+        trigger_desc = "every 15 minutes at :00, :15, :30, :45"
+    elif interval == 30:
+        # Every 30 minutes
+        trigger = CronTrigger(minute="0,30")
+        trigger_desc = "every 30 minutes at :00, :30"
+    else:
+        # Fallback to interval trigger for non-standard intervals
+        trigger = IntervalTrigger(minutes=interval)
+        trigger_desc = f"every {interval} minutes (interval-based)"
+
     # Add the import job
     scheduler.add_job(
         import_job,
-        trigger=IntervalTrigger(minutes=settings.poll_interval_minutes),
+        trigger=trigger,
         id="kamo_import",
         name="KAMO Data Import",
         replace_existing=True,
@@ -58,9 +90,7 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info(
-        f"Scheduler started with {settings.poll_interval_minutes} minute interval"
-    )
+    logger.info(f"Scheduler started: {trigger_desc}")
 
 
 def stop_scheduler():

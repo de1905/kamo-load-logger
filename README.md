@@ -4,14 +4,38 @@ A production-grade Docker service that polls the KAMO Power API, stores historic
 
 ## Features
 
-- **Automated Data Collection**: Polls KAMO Power API every 30 minutes (configurable)
+- **Automated Data Collection**: Polls KAMO Power API every 5 minutes (configurable)
 - **Historical Storage**: SQLite database with unlimited retention
 - **Deduplication**: Automatically handles duplicate data points
 - **REST API**: Full API for querying historical data
 - **Web Dashboard**: Monitor import status and database statistics
+- **Data Inspector**: View load data like the iOS app with charts
+- **Database Tables Viewer**: Browse all database tables and records
 - **Email Notifications**: Alerts on import failures
 - **Backup/Restore**: Scripts for data backup and migration
 - **Multi-Platform**: Runs on x86_64 and ARM64 (Raspberry Pi)
+
+## KAMO API Polling Strategy
+
+The KAMO Power API provides two types of data:
+
+| Endpoint | Data Type | KAMO Update Frequency | Notes |
+|----------|-----------|----------------------|-------|
+| `/api/areagrid/{id}` | Load history | Hourly | ~12 hours lookback of actual load |
+| `/api/arealoadtable/{id}` | Substation snapshot | ~3 minutes | Real-time kW, kVAR, PF per substation |
+
+**Default polling: Every 5 minutes** at standardized timestamps (:00, :05, :10, :15, etc.)
+
+This captures:
+- Every hourly load data point
+- ~60% of substation updates (good balance of resolution vs. API load)
+
+| Poll Interval | Substation Records/Month | Configuration |
+|---------------|--------------------------|---------------|
+| 5 min (default) | ~120,000 | `POLL_INTERVAL_MINUTES=5` |
+| 10 min | ~60,000 | `POLL_INTERVAL_MINUTES=10` |
+| 15 min | ~40,000 | `POLL_INTERVAL_MINUTES=15` |
+| 30 min | ~20,000 | `POLL_INTERVAL_MINUTES=30` |
 
 ## Quick Start
 
@@ -43,8 +67,8 @@ Open http://localhost:8080 in your browser.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `API_KEY` | Yes | - | API key for protected endpoints |
-| `POLL_INTERVAL_MINUTES` | No | 30 | How often to poll KAMO API |
-| `TZ` | No | America/Chicago | Timezone |
+| `POLL_INTERVAL_MINUTES` | No | 5 | How often to poll KAMO API (5, 10, 15, or 30 for aligned timestamps) |
+| `TZ` | No | America/Chicago | Timezone (all timestamps stored in Central Time) |
 | `SMTP_HOST` | No | - | SMTP server for notifications |
 | `SMTP_PORT` | No | 587 | SMTP port |
 | `SMTP_USER` | No | - | SMTP username |

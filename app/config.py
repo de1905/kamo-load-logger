@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///data/kamo_load.db"
 
     # Polling
-    poll_interval_minutes: int = 30
+    # KAMO API updates substation data every ~3 minutes
+    # Default to 5 minutes for good resolution without excessive load
+    # Timestamps are standardized to even 5-minute marks (e.g., 9:00, 9:05, 9:10)
+    poll_interval_minutes: int = 5
 
     # Logging
     log_level: str = "INFO"

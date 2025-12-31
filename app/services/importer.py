@@ -200,8 +200,12 @@ class DataImporter:
         """
         response = await self.client.get_area_substations(area_id)
         # Use Central Time to match KAMO's timezone
+        # Round to nearest 5-minute mark for standardized timestamps (e.g., 9:00, 9:05, 9:10)
         central = ZoneInfo("America/Chicago")
-        snapshot_time = datetime.now(central).replace(second=0, microsecond=0, tzinfo=None)
+        now = datetime.now(central)
+        # Round down to nearest 5 minutes
+        rounded_minute = (now.minute // 5) * 5
+        snapshot_time = now.replace(minute=rounded_minute, second=0, microsecond=0, tzinfo=None)
 
         imported = 0
         skipped = 0
