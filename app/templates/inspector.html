@@ -122,6 +122,83 @@
         position: relative;
     }
 
+    /* Data Table */
+    .data-table-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+        margin-top: 0.75rem;
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        transition: all 0.2s;
+    }
+
+    .data-table-toggle:hover {
+        background: var(--gray-100);
+    }
+
+    .data-table-toggle .arrow {
+        margin-left: 0.5rem;
+        transition: transform 0.2s;
+    }
+
+    .data-table-toggle.open .arrow {
+        transform: rotate(180deg);
+    }
+
+    .data-table-container {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+
+    .data-table-container.open {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 0.75rem;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.75rem;
+    }
+
+    .data-table th {
+        position: sticky;
+        top: 0;
+        background: var(--gray-100);
+        padding: 0.5rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--gray-700);
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .data-table td {
+        padding: 0.375rem 0.5rem;
+        border-bottom: 1px solid var(--gray-100);
+        color: var(--gray-800);
+    }
+
+    .data-table tr:hover td {
+        background: var(--gray-50);
+    }
+
+    .data-table .timestamp {
+        white-space: nowrap;
+    }
+
+    .data-table .value {
+        text-align: right;
+        font-family: monospace;
+    }
+
     /* Substations Section */
     .substations-section {
         background: white;
@@ -570,6 +647,24 @@
         <div class="chart-container">
             <canvas id="loadChart"></canvas>
         </div>
+
+        <!-- Data Table Toggle -->
+        <div class="data-table-toggle" onclick="toggleDataTable('load')">
+            <span>Show Data Points (<span id="loadDataCount">0</span>)</span>
+            <span class="arrow">&#9660;</span>
+        </div>
+        <div class="data-table-container" id="loadDataTable">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th style="text-align: right;">Load</th>
+                    </tr>
+                </thead>
+                <tbody id="loadDataBody">
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Substations -->
@@ -646,6 +741,24 @@
                     <div class="substation-chart-container">
                         <canvas id="substationChart"></canvas>
                     </div>
+
+                    <!-- Substation Data Table Toggle -->
+                    <div class="data-table-toggle" onclick="toggleDataTable('substation')">
+                        <span>Show Data Points (<span id="substationDataCount">0</span>)</span>
+                        <span class="arrow">&#9660;</span>
+                    </div>
+                    <div class="data-table-container" id="substationDataTable">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th style="text-align: right;">Load</th>
+                                </tr>
+                            </thead>
+                            <tbody id="substationDataBody">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -662,6 +775,8 @@
     let substationsData = [];
     let currentSubstationName = null;
     let substationHours = 24;
+    let loadDataPoints = [];
+    let substationDataPoints = [];
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -768,8 +883,26 @@
 
             document.getElementById('chartCard').style.display = 'block';
 
-            const labels = data.data.map(d => new Date(d.timestamp));
-            const values = data.data.map(d => d.load_kw / 1000); // Convert to MW
+            // Store data for table
+            loadDataPoints = data.data.map(d => ({
+                timestamp: new Date(d.timestamp),
+                load_kw: d.load_kw
+            }));
+
+            // Update data count
+            document.getElementById('loadDataCount').textContent = loadDataPoints.length;
+
+            // Populate data table (most recent first)
+            const tbody = document.getElementById('loadDataBody');
+            tbody.innerHTML = [...loadDataPoints].reverse().map(d => `
+                <tr>
+                    <td class="timestamp">${d.timestamp.toLocaleString()}</td>
+                    <td class="value">${formatLoad(d.load_kw)}</td>
+                </tr>
+            `).join('');
+
+            const labels = loadDataPoints.map(d => d.timestamp);
+            const values = loadDataPoints.map(d => d.load_kw / 1000); // Convert to MW
 
             if (loadChart) {
                 loadChart.destroy();
@@ -1022,13 +1155,25 @@
             }
 
             // Extract data points - each snapshot has one substation entry
-            const chartData = data.snapshots.map(snapshot => ({
+            substationDataPoints = data.snapshots.map(snapshot => ({
                 timestamp: new Date(snapshot.snapshot_time),
                 kw: snapshot.substations[0]?.kw || 0
             })).sort((a, b) => a.timestamp - b.timestamp);
 
-            const labels = chartData.map(d => d.timestamp);
-            const values = chartData.map(d => d.kw);
+            // Update data count
+            document.getElementById('substationDataCount').textContent = substationDataPoints.length;
+
+            // Populate data table (most recent first)
+            const tbody = document.getElementById('substationDataBody');
+            tbody.innerHTML = [...substationDataPoints].reverse().map(d => `
+                <tr>
+                    <td class="timestamp">${d.timestamp.toLocaleString()}</td>
+                    <td class="value">${formatLoadShort(d.kw)}</td>
+                </tr>
+            `).join('');
+
+            const labels = substationDataPoints.map(d => d.timestamp);
+            const values = substationDataPoints.map(d => d.kw);
 
             // Update chart title
             document.querySelector('.substation-chart-title').textContent = `Load History (${hours}h)`;
@@ -1130,6 +1275,25 @@
             return (kw / 1000).toFixed(1) + ' MW';
         }
         return kw.toFixed(0) + ' kW';
+    }
+
+    function toggleDataTable(type) {
+        const toggleBtn = type === 'load'
+            ? document.querySelector('#chartCard .data-table-toggle')
+            : document.querySelector('#substationDataTable').previousElementSibling;
+        const container = document.getElementById(type === 'load' ? 'loadDataTable' : 'substationDataTable');
+
+        toggleBtn.classList.toggle('open');
+        container.classList.toggle('open');
+
+        // Update button text
+        const span = toggleBtn.querySelector('span:first-child');
+        const count = type === 'load' ? loadDataPoints.length : substationDataPoints.length;
+        if (container.classList.contains('open')) {
+            span.innerHTML = `Hide Data Points (<span id="${type}DataCount">${count}</span>)`;
+        } else {
+            span.innerHTML = `Show Data Points (<span id="${type}DataCount">${count}</span>)`;
+        }
     }
 
     // Close modal on escape key
