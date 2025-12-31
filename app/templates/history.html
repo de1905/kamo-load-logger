@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Import History - KAMO Load Logger{% endblock %}
+
+{% block content %}
+<h1>Import History</h1>
+
+<div class="section">
+    <div class="card">
+        <div class="table-header">
+            <span>Total: {{ "{:,}".format(total) }} imports</span>
+            <span>Page {{ page }} of {{ total_pages }}</span>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Started</th>
+                    <th>Completed</th>
+                    <th>Status</th>
+                    <th>Load +/-</th>
+                    <th>Subs +/-</th>
+                    <th>Duration</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for import in imports %}
+                <tr class="{% if import.status == 'failed' %}row-error{% endif %}">
+                    <td>{{ import.id }}</td>
+                    <td>{{ import.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{% if import.completed_at %}{{ import.completed_at.strftime('%H:%M:%S') }}{% else %}-{% endif %}</td>
+                    <td>
+                        {% if import.status == 'success' %}
+                        <span class="badge badge-success">Success</span>
+                        {% elif import.status == 'failed' %}
+                        <span class="badge badge-danger">Failed</span>
+                        {% elif import.status == 'running' %}
+                        <span class="badge badge-warning">Running</span>
+                        {% else %}
+                        <span class="badge badge-secondary">{{ import.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>+{{ import.load_records_imported }} / -{{ import.load_records_skipped }}</td>
+                    <td>+{{ import.substation_records_imported }} / -{{ import.substation_records_skipped }}</td>
+                    <td>{% if import.duration_seconds %}{{ "%.2f"|format(import.duration_seconds) }}s{% else %}-{% endif %}</td>
+                    <td class="error-cell" title="{{ import.error_message or '' }}">
+                        {% if import.error_message %}
+                        {{ import.error_message[:50] }}{% if import.error_message|length > 50 %}...{% endif %}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center">No import history</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="/history?page={{ page - 1 }}" class="btn">&laquo; Previous</a>
+            {% endif %}
+
+            <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+
+            {% if page < total_pages %}
+            <a href="/history?page={{ page + 1 }}" class="btn">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

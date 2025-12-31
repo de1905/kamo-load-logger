@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - KAMO Load Logger{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<!-- Status Cards -->
+<div class="card-grid">
+    <div class="card {% if last_import and last_import.status == 'failed' %}card-warning{% else %}card-success{% endif %}">
+        <h3>Last Import</h3>
+        {% if last_import %}
+        <div class="stat-value">{{ last_import.status | title }}</div>
+        <div class="stat-label">
+            {{ last_import.started_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+        </div>
+        {% if last_import.duration_seconds %}
+        <div class="stat-meta">Duration: {{ "%.1f"|format(last_import.duration_seconds) }}s</div>
+        {% endif %}
+        {% else %}
+        <div class="stat-value">No imports yet</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Next Import</h3>
+        {% if next_run %}
+        <div class="stat-value">{{ next_run.strftime('%H:%M:%S') }}</div>
+        <div class="stat-label">{{ next_run.strftime('%Y-%m-%d') }} UTC</div>
+        {% else %}
+        <div class="stat-value">Scheduler not running</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Success Rate (24h)</h3>
+        <div class="stat-value {% if stats_24h.success_rate >= 90 %}text-success{% elif stats_24h.success_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+            {{ "%.1f"|format(stats_24h.success_rate) }}%
+        </div>
+        <div class="stat-label">{{ stats_24h.successful }} / {{ stats_24h.total }} imports</div>
+    </div>
+
+    <div class="card">
+        <h3>Success Rate (7d)</h3>
+        <div class="stat-value {% if stats_7d.success_rate >= 90 %}text-success{% elif stats_7d.success_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+            {{ "%.1f"|format(stats_7d.success_rate) }}%
+        </div>
+        <div class="stat-label">{{ stats_7d.successful }} / {{ stats_7d.total }} imports</div>
+    </div>
+</div>
+
+<!-- Database Stats -->
+<div class="section">
+    <h2>Database Statistics</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>Load Records</h3>
+            <div class="stat-value">{{ "{:,}".format(load_count) }}</div>
+        </div>
+        <div class="card">
+            <h3>Substation Records</h3>
+            <div class="stat-value">{{ "{:,}".format(sub_count) }}</div>
+        </div>
+        <div class="card">
+            <h3>Cooperatives</h3>
+            <div class="stat-value">{{ coop_count }}</div>
+        </div>
+        <div class="card">
+            <h3>Data Range</h3>
+            {% if oldest_record and newest_record %}
+            <div class="stat-value">{{ ((newest_record - oldest_record).days) }} days</div>
+            <div class="stat-label">
+                {{ oldest_record.strftime('%Y-%m-%d') }} to {{ newest_record.strftime('%Y-%m-%d') }}
+            </div>
+            {% else %}
+            <div class="stat-value">No data</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Configuration -->
+<div class="section">
+    <h2>Configuration</h2>
+    <div class="card">
+        <table class="config-table">
+            <tr>
+                <td>Poll Interval</td>
+                <td>{{ poll_interval }} minutes</td>
+            </tr>
+            <tr>
+                <td>Email Notifications</td>
+                <td>
+                    {% if notifications_enabled %}
+                    <span class="badge badge-success">Enabled</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Disabled</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Imports -->
+<div class="section">
+    <h2>Recent Imports</h2>
+    <div class="card">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Status</th>
+                    <th>Load Records</th>
+                    <th>Substation Records</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for import in recent_imports %}
+                <tr>
+                    <td>{{ import.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                        {% if import.status == 'success' %}
+                        <span class="badge badge-success">Success</span>
+                        {% elif import.status == 'failed' %}
+                        <span class="badge badge-danger">Failed</span>
+                        {% else %}
+                        <span class="badge badge-secondary">{{ import.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>+{{ import.load_records_imported }} / -{{ import.load_records_skipped }}</td>
+                    <td>+{{ import.substation_records_imported }} / -{{ import.substation_records_skipped }}</td>
+                    <td>{% if import.duration_seconds %}{{ "%.1f"|format(import.duration_seconds) }}s{% else %}-{% endif %}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center">No import history yet</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="table-footer">
+            <a href="/history">View all imports &rarr;</a>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="section">
+    <h2>Actions</h2>
+    <div class="card">
+        <p>Use the API to trigger a manual import:</p>
+        <code>curl -X POST -H "X-API-Key: YOUR_KEY" http://localhost:8080/api/import/trigger</code>
+    </div>
+</div>
+{% endblock %}

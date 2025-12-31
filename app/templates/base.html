@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}KAMO Load Logger{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="nav-brand">KAMO Load Logger</a>
+            <div class="nav-links">
+                <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+                <a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">Import History</a>
+                <a href="/docs" target="_blank">API Docs</a>
+            </div>
+            <span class="version">v{{ version }}</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>KAMO Load Logger v{{ version }} | Data updates every {{ poll_interval }} minutes</p>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
