@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -198,7 +199,9 @@ class DataImporter:
         Returns (imported_count, skipped_count).
         """
         response = await self.client.get_area_substations(area_id)
-        snapshot_time = datetime.utcnow().replace(second=0, microsecond=0)
+        # Use Central Time to match KAMO's timezone
+        central = ZoneInfo("America/Chicago")
+        snapshot_time = datetime.now(central).replace(second=0, microsecond=0, tzinfo=None)
 
         imported = 0
         skipped = 0
