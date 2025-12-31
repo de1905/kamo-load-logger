@@ -1,10 +1,18 @@
 """Data import service with deduplication."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
+
+# Central timezone for all timestamps
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def now_central():
+    """Get current time in Central timezone (naive datetime for SQLite)."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
 
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -52,7 +60,7 @@ class DataImporter:
 
     async def run_import(self) -> ImportResult:
         """Run a full import cycle."""
-        start_time = datetime.utcnow()
+        start_time = now_central()
         SessionLocal = get_session_local()
         db = SessionLocal()
 
@@ -113,7 +121,7 @@ class DataImporter:
 
         finally:
             # Update import log
-            end_time = datetime.utcnow()
+            end_time = now_central()
             result.duration_seconds = (end_time - start_time).total_seconds()
 
             import_log.completed_at = end_time
@@ -199,13 +207,10 @@ class DataImporter:
         Returns (imported_count, skipped_count).
         """
         response = await self.client.get_area_substations(area_id)
-        # Use Central Time to match KAMO's timezone
         # Round to nearest 5-minute mark for standardized timestamps (e.g., 9:00, 9:05, 9:10)
-        central = ZoneInfo("America/Chicago")
-        now = datetime.now(central)
-        # Round down to nearest 5 minutes
+        now = now_central()
         rounded_minute = (now.minute // 5) * 5
-        snapshot_time = now.replace(minute=rounded_minute, second=0, microsecond=0, tzinfo=None)
+        snapshot_time = now.replace(minute=rounded_minute, second=0, microsecond=0)
 
         imported = 0
         skipped = 0
@@ -248,12 +253,11 @@ class DataImporter:
 
     def get_import_stats(self, db: Session, hours: int = 24) -> dict:
         """Get import statistics for the last N hours."""
-        cutoff = datetime.utcnow().replace(
+        cutoff = now_central().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         if hours < 24:
-            from datetime import timedelta
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            cutoff = now_central() - timedelta(hours=hours)
 
         total = db.query(func.count(ImportLog.id)).filter(
             ImportLog.started_at >= cutoff

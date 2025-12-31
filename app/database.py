@@ -2,6 +2,8 @@
 
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import (
     create_engine,
     Column,
@@ -23,6 +25,14 @@ from app.config import get_settings
 
 Base = declarative_base()
 
+# Central timezone for all timestamps
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def now_central():
+    """Get current time in Central timezone (naive datetime for SQLite)."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
+
 
 class Cooperative(Base):
     """Cooperative/area cached from KAMO API."""
@@ -33,7 +43,7 @@ class Cooperative(Base):
     name = Column(String(255), nullable=False)
     abbreviation = Column(String(10), nullable=False)
     is_aggregate = Column(Boolean, default=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=now_central, onupdate=now_central)
 
     # Relationships
     load_data = relationship("LoadData", back_populates="cooperative")
@@ -49,7 +59,7 @@ class LoadData(Base):
     area_id = Column(Integer, ForeignKey("cooperatives.id"), nullable=False)
     timestamp = Column(DateTime, nullable=False)
     load_kw = Column(Float, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_central)
 
     # Relationships
     cooperative = relationship("Cooperative", back_populates="load_data")
@@ -75,7 +85,7 @@ class SubstationSnapshot(Base):
     pf = Column(Float, nullable=False)
     quality = Column(Boolean)
     quality_now = Column(Boolean)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_central)
 
     # Relationships
     cooperative = relationship("Cooperative", back_populates="substation_snapshots")
@@ -95,7 +105,7 @@ class ImportLog(Base):
     __tablename__ = "import_log"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=False, default=now_central)
     completed_at = Column(DateTime)
     status = Column(String(20), nullable=False, default="running")  # running, success, failed
     load_records_imported = Column(Integer, default=0)
