@@ -221,6 +221,166 @@
     .pf-warning { color: var(--warning); }
     .pf-bad { color: var(--danger); }
 
+    .substation-row {
+        cursor: pointer;
+    }
+
+    .substation-row .chevron {
+        color: var(--gray-400);
+        margin-left: 0.5rem;
+    }
+
+    /* Substation Detail Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s;
+    }
+
+    .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 16px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        transform: translateY(20px);
+        transition: transform 0.3s;
+    }
+
+    .modal-overlay.active .modal-content {
+        transform: translateY(0);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--gray-200);
+        position: sticky;
+        top: 0;
+        background: white;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .modal-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--gray-500);
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+    }
+
+    .modal-close:hover {
+        color: var(--gray-900);
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+    }
+
+    .substation-detail-card {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+
+    .substation-detail-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    .substation-detail-unit {
+        font-size: 1.25rem;
+        font-weight: 400;
+        opacity: 0.9;
+    }
+
+    .substation-detail-label {
+        font-size: 0.875rem;
+        opacity: 0.8;
+        margin-top: 0.5rem;
+    }
+
+    .substation-detail-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .substation-stat-item {
+        background: var(--gray-50);
+        border-radius: 8px;
+        padding: 0.75rem;
+        text-align: center;
+    }
+
+    .substation-stat-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    .substation-stat-label {
+        font-size: 0.625rem;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        margin-top: 0.25rem;
+    }
+
+    .substation-chart-card {
+        background: var(--gray-50);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+
+    .substation-chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .substation-chart-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+
+    .substation-chart-container {
+        height: 200px;
+        position: relative;
+    }
+
     /* Loading State */
     .loading {
         display: flex;
@@ -439,15 +599,69 @@
         <h3>Select an Area</h3>
         <p>Choose a cooperative or region above to view load data and substations.</p>
     </div>
+
+    <!-- Substation Detail Modal -->
+    <div class="modal-overlay" id="substationModal" onclick="closeSubstationModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-title" id="modalSubstationName">Substation</span>
+                <button class="modal-close" onclick="closeSubstationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Current Load Display -->
+                <div class="substation-detail-card">
+                    <div class="substation-detail-value">
+                        <span id="modalCurrentLoad">--</span>
+                        <span class="substation-detail-unit" id="modalCurrentUnit">kW</span>
+                    </div>
+                    <div class="substation-detail-label">Current Load</div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="substation-detail-stats">
+                    <div class="substation-stat-item">
+                        <div class="substation-stat-value" id="modalStatMin">--</div>
+                        <div class="substation-stat-label">24h Min</div>
+                    </div>
+                    <div class="substation-stat-item">
+                        <div class="substation-stat-value" id="modalStatMax">--</div>
+                        <div class="substation-stat-label">24h Max</div>
+                    </div>
+                    <div class="substation-stat-item">
+                        <div class="substation-stat-value" id="modalStatPF">--</div>
+                        <div class="substation-stat-label">Avg PF</div>
+                    </div>
+                </div>
+
+                <!-- Load History Chart -->
+                <div class="substation-chart-card">
+                    <div class="substation-chart-header">
+                        <span class="substation-chart-title">Load History (24h)</span>
+                        <div class="chart-controls">
+                            <button class="active" data-hours="24" onclick="setSubstationChartRange(24)">24h</button>
+                            <button data-hours="48" onclick="setSubstationChartRange(48)">48h</button>
+                            <button data-hours="168" onclick="setSubstationChartRange(168)">7d</button>
+                        </div>
+                    </div>
+                    <div class="substation-chart-container">
+                        <canvas id="substationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
     let loadChart = null;
+    let substationChart = null;
     let currentAreaId = null;
     let currentHours = 24;
     let substationsData = [];
+    let currentSubstationName = null;
+    let substationHours = 24;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -682,8 +896,10 @@
         if (pf < 0.85) pfClass = 'pf-bad';
         else if (pf < 0.95) pfClass = 'pf-warning';
 
+        const escapedName = sub.substation_name.replace(/'/g, "\\'");
+
         return `
-            <div class="substation-row">
+            <div class="substation-row" onclick="openSubstationModal('${escapedName}')">
                 <div class="substation-info">
                     <div class="substation-name">${sub.substation_name}</div>
                     <div class="substation-details">
@@ -695,6 +911,7 @@
                     <div class="substation-pf ${pfClass}">${pf.toFixed(2)}</div>
                     <div class="substation-pf-label">PF</div>
                 </div>
+                <span class="chevron">&#9654;</span>
             </div>
         `;
     }
@@ -728,5 +945,198 @@
         document.getElementById('chartCard').style.display = 'none';
         document.getElementById('substationsSection').style.display = 'none';
     }
+
+    // Substation Modal Functions
+    function openSubstationModal(substationName) {
+        currentSubstationName = substationName;
+        substationHours = 24;
+
+        // Update modal title
+        document.getElementById('modalSubstationName').textContent = substationName;
+
+        // Reset chart range buttons
+        document.querySelectorAll('.modal-content .chart-controls button').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.hours) === 24);
+        });
+
+        // Show modal
+        document.getElementById('substationModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        // Find current substation data
+        const sub = substationsData.find(s => s.substation_name === substationName);
+        if (sub) {
+            // Display current values
+            if (sub.kw >= 1000) {
+                document.getElementById('modalCurrentLoad').textContent = (sub.kw / 1000).toFixed(1);
+                document.getElementById('modalCurrentUnit').textContent = 'MW';
+            } else {
+                document.getElementById('modalCurrentLoad').textContent = sub.kw.toFixed(0);
+                document.getElementById('modalCurrentUnit').textContent = 'kW';
+            }
+        }
+
+        // Load stats and history
+        loadSubstationStats(substationName);
+        loadSubstationHistory(substationName, substationHours);
+    }
+
+    function closeSubstationModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+
+        document.getElementById('substationModal').classList.remove('active');
+        document.body.style.overflow = '';
+
+        if (substationChart) {
+            substationChart.destroy();
+            substationChart = null;
+        }
+    }
+
+    async function loadSubstationStats(substationName) {
+        try {
+            const response = await fetch(`/api/substations/stats/${currentAreaId}/${encodeURIComponent(substationName)}?hours=24`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+
+            document.getElementById('modalStatMin').textContent = formatLoadShort(data.min_kw);
+            document.getElementById('modalStatMax').textContent = formatLoadShort(data.max_kw);
+            document.getElementById('modalStatPF').textContent = data.avg_pf ? data.avg_pf.toFixed(2) : '--';
+        } catch (e) {
+            document.getElementById('modalStatMin').textContent = '--';
+            document.getElementById('modalStatMax').textContent = '--';
+            document.getElementById('modalStatPF').textContent = '--';
+        }
+    }
+
+    async function loadSubstationHistory(substationName, hours) {
+        try {
+            const response = await fetch(`/api/substations/history/${currentAreaId}?substation=${encodeURIComponent(substationName)}&hours=${hours}&limit=200`);
+            if (!response.ok) throw new Error('No data');
+
+            const data = await response.json();
+
+            if (!data.snapshots || data.snapshots.length === 0) {
+                return;
+            }
+
+            // Extract data points - each snapshot has one substation entry
+            const chartData = data.snapshots.map(snapshot => ({
+                timestamp: new Date(snapshot.snapshot_time),
+                kw: snapshot.substations[0]?.kw || 0
+            })).sort((a, b) => a.timestamp - b.timestamp);
+
+            const labels = chartData.map(d => d.timestamp);
+            const values = chartData.map(d => d.kw);
+
+            // Update chart title
+            document.querySelector('.substation-chart-title').textContent = `Load History (${hours}h)`;
+
+            if (substationChart) {
+                substationChart.destroy();
+            }
+
+            const ctx = document.getElementById('substationChart').getContext('2d');
+            substationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Load (kW)',
+                        data: values,
+                        borderColor: '#059669',
+                        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const kw = context.parsed.y;
+                                    if (kw >= 1000) {
+                                        return `${(kw / 1000).toFixed(1)} MW`;
+                                    }
+                                    return `${kw.toFixed(0)} kW`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                displayFormats: {
+                                    hour: 'MMM d, ha'
+                                }
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 1000) {
+                                        return (value / 1000).toFixed(1) + ' MW';
+                                    }
+                                    return value.toFixed(0) + ' kW';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Failed to load substation history:', e);
+        }
+    }
+
+    function setSubstationChartRange(hours) {
+        substationHours = hours;
+
+        // Update button states
+        document.querySelectorAll('.modal-content .chart-controls button').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.hours) === hours);
+        });
+
+        if (currentSubstationName) {
+            loadSubstationHistory(currentSubstationName, hours);
+        }
+    }
+
+    function formatLoadShort(kw) {
+        if (!kw) return '--';
+        if (kw >= 1000) {
+            return (kw / 1000).toFixed(1) + ' MW';
+        }
+        return kw.toFixed(0) + ' kW';
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeSubstationModal();
+        }
+    });
 </script>
 {% endblock %}
