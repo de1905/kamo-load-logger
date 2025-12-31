@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.services.importer import DataImporter
 from app.services.settings import get_settings_service, CONFIGURABLE_SETTINGS
+from app.services.notifications import NotificationService
 from app.scheduler import trigger_manual_import, get_next_run_time, restart_scheduler
 
 router = APIRouter()
@@ -311,3 +312,18 @@ async def reset_setting(key: str, db: Session = Depends(get_db)):
         restart_scheduler()
 
     return {"key": key, "reset": True}
+
+
+@router.post("/test-email")
+async def send_test_email():
+    """Send a test email to verify SMTP configuration."""
+    service = NotificationService()
+    success, error = await service.send_test_email()
+
+    if success:
+        return {"success": True, "message": "Test email sent successfully"}
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=error or "Failed to send test email"
+        )

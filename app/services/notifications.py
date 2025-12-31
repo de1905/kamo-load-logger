@@ -4,11 +4,12 @@ import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 import aiosmtplib
 
 from app.config import get_settings
+from app.services.settings import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -17,33 +18,52 @@ class NotificationService:
     """Send email notifications for alerts."""
 
     def __init__(self):
-        self.settings = get_settings()
+        self.env_settings = get_settings()
+
+    def _get_smtp_settings(self) -> dict:
+        """Get SMTP settings from DB (with ENV fallback)."""
+        return {
+            "host": get_setting("smtp_host") or "",
+            "port": get_setting("smtp_port") or 587,
+            "user": get_setting("smtp_user") or "",
+            "password": self.env_settings.smtp_password,  # Password stays in ENV only
+            "from_addr": get_setting("smtp_from") or get_setting("smtp_user") or "",
+            "notification_email": get_setting("notification_email") or "",
+        }
 
     @property
     def enabled(self) -> bool:
         """Check if notifications are enabled."""
-        return self.settings.notifications_enabled
+        settings = self._get_smtp_settings()
+        return bool(settings["host"] and settings["user"] and settings["notification_email"])
 
     async def send_email(
         self,
         subject: str,
         body: str,
         html_body: Optional[str] = None,
-    ) -> bool:
+    ) -> Tuple[bool, Optional[str]]:
         """
         Send an email notification.
 
-        Returns True if sent successfully, False otherwise.
+        Returns (success, error_message).
         """
-        if not self.enabled:
-            logger.debug("Notifications disabled, skipping email")
-            return False
+        settings = self._get_smtp_settings()
+
+        if not settings["host"]:
+            return False, "SMTP host not configured"
+        if not settings["user"]:
+            return False, "SMTP user not configured"
+        if not settings["notification_email"]:
+            return False, "Notification email not configured"
+        if not settings["password"]:
+            return False, "SMTP password not configured (set in .env file)"
 
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = f"[KAMO Logger] {subject}"
-            msg["From"] = self.settings.smtp_from or self.settings.smtp_user
-            msg["To"] = self.settings.notification_email
+            msg["From"] = settings["from_addr"]
+            msg["To"] = settings["notification_email"]
 
             # Plain text version
             msg.attach(MIMEText(body, "plain"))
@@ -55,19 +75,20 @@ class NotificationService:
             # Send via SMTP
             await aiosmtplib.send(
                 msg,
-                hostname=self.settings.smtp_host,
-                port=self.settings.smtp_port,
-                username=self.settings.smtp_user,
-                password=self.settings.smtp_password,
+                hostname=settings["host"],
+                port=settings["port"],
+                username=settings["user"],
+                password=settings["password"],
                 start_tls=True,
             )
 
             logger.info(f"Email sent: {subject}")
-            return True
+            return True, None
 
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            return False
+            error_msg = str(e)
+            logger.error(f"Failed to send email: {error_msg}")
+            return False, error_msg
 
     async def send_failure_alert(self, message: str) -> bool:
         """Send an import failure alert."""
@@ -112,7 +133,8 @@ Check the dashboard for more details.
 </html>
 """
 
-        return await self.send_email("Import Failure Alert", body, html_body)
+        success, _ = await self.send_email("Import Failure Alert", body, html_body)
+        return success
 
     async def send_recovery_notice(self) -> bool:
         """Send a notice that imports have recovered."""
@@ -129,9 +151,10 @@ Data imports have resumed successfully after previous failures.
 This is an automated message from KAMO Load Logger.
 """
 
-        return await self.send_email("Import Recovered", body)
+        success, _ = await self.send_email("Import Recovered", body)
+        return success
 
-    async def send_test_email(self) -> bool:
+    async def send_test_email(self) -> Tuple[bool, Optional[str]]:
         """Send a test email to verify configuration."""
         body = """KAMO Load Logger Test
 

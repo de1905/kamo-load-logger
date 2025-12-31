@@ -334,6 +334,7 @@
             </div>
         </div>
         <div class="settings-actions">
+            <button class="btn btn-secondary" id="testEmailBtn" onclick="sendTestEmail()">Send Test Email</button>
             <button class="btn btn-secondary" onclick="resetSettings()">Reset to Defaults</button>
             <button class="btn btn-primary" id="saveBtn" onclick="saveSettings()" disabled>Save Changes</button>
         </div>
@@ -495,6 +496,30 @@
         setTimeout(() => {
             el.className = 'status-message';
         }, 5000);
+    }
+
+    async function sendTestEmail() {
+        const btn = document.getElementById('testEmailBtn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Sending...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/api/test-email', { method: 'POST' });
+            const data = await response.json();
+
+            if (response.ok) {
+                showStatus('Test email sent successfully! Check your inbox.', 'success');
+            } else {
+                showStatus(`Failed: ${data.detail || 'Unknown error'}`, 'error');
+            }
+        } catch (e) {
+            console.error('Failed to send test email:', e);
+            showStatus('Failed to send test email', 'error');
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
     }
 </script>
 {% endblock %}
