@@ -2,6 +2,49 @@
 
 {% block title %}Import History - KAMO Load Logger{% endblock %}
 
+{% block extra_head %}
+<style>
+    .btn-delete {
+        background: transparent;
+        border: 1px solid #dc2626;
+        color: #dc2626;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-delete:hover {
+        background: #dc2626;
+        color: white;
+    }
+    .btn-delete:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .status-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        z-index: 1000;
+        display: none;
+    }
+    .status-toast.success {
+        background: #d1fae5;
+        color: #065f46;
+        display: block;
+    }
+    .status-toast.error {
+        background: #fee2e2;
+        color: #991b1b;
+        display: block;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Import History</h1>
 
@@ -23,6 +66,7 @@
                     <th>Subs +/-</th>
                     <th>Duration</th>
                     <th>Error</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -52,10 +96,13 @@
                         -
                         {% endif %}
                     </td>
+                    <td>
+                        <button class="btn-delete" onclick="deleteImport({{ import.id }}, this)" title="Delete this import">Delete</button>
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" class="text-center">No import history</td>
+                    <td colspan="9" class="text-center">No import history</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -77,4 +124,51 @@
         {% endif %}
     </div>
 </div>
+
+<div class="status-toast" id="toast"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    async function deleteImport(importId, btn) {
+        if (!confirm(`Delete import #${importId}?`)) return;
+
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/imports/${importId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Remove the row from the table
+                const row = btn.closest('tr');
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => row.remove(), 300);
+                showToast('Import deleted', 'success');
+            } else {
+                const data = await response.json();
+                showToast(data.detail || 'Failed to delete', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Delete';
+            }
+        } catch (e) {
+            console.error('Delete failed:', e);
+            showToast('Failed to delete import', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Delete';
+        }
+    }
+
+    function showToast(message, type) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = `status-toast ${type}`;
+        setTimeout(() => {
+            toast.className = 'status-toast';
+        }, 3000);
+    }
+</script>
 {% endblock %}

@@ -128,6 +128,21 @@ async def get_import_history(
     return [ImportLogEntry.model_validate(i) for i in imports]
 
 
+@router.delete("/imports/{import_id}")
+async def delete_import(
+    import_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete an import log entry."""
+    import_log = db.query(ImportLog).filter(ImportLog.id == import_id).first()
+    if not import_log:
+        raise HTTPException(status_code=404, detail=f"Import {import_id} not found")
+
+    db.delete(import_log)
+    db.commit()
+    return {"success": True, "deleted_id": import_id}
+
+
 @router.post("/import/trigger")
 async def manual_import(
     authenticated: bool = Depends(verify_api_key),
