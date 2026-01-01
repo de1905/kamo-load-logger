@@ -1,6 +1,7 @@
 """KAMO Load Logger - Main FastAPI application."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -90,6 +91,10 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     oldest = db.query(func.min(LoadData.timestamp)).scalar()
     newest = db.query(func.max(LoadData.timestamp)).scalar()
 
+    # Database file size
+    db_path = settings.database_url.replace("sqlite:///", "")
+    db_size_mb = os.path.getsize(db_path) / (1024 * 1024) if os.path.exists(db_path) else 0
+
     # Recent imports
     recent_imports = (
         db.query(ImportLog)
@@ -115,6 +120,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "coop_count": coop_count,
             "oldest_record": oldest,
             "newest_record": newest,
+            "db_size_mb": db_size_mb,
             "recent_imports": recent_imports,
             "next_run": next_run,
             "notifications_enabled": settings.notifications_enabled,

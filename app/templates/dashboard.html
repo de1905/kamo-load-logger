@@ -12,7 +12,7 @@
         {% if last_import %}
         <div class="stat-value">{{ last_import.status | title }}</div>
         <div class="stat-label">
-            {{ last_import.started_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+            {{ last_import.started_at.strftime('%Y-%m-%d %H:%M:%S') }} CST
         </div>
         {% if last_import.duration_seconds %}
         <div class="stat-meta">Duration: {{ "%.1f"|format(last_import.duration_seconds) }}s</div>
@@ -26,7 +26,7 @@
         <h3>Next Import</h3>
         {% if next_run %}
         <div class="stat-value">{{ next_run.strftime('%H:%M:%S') }}</div>
-        <div class="stat-label">{{ next_run.strftime('%Y-%m-%d') }} UTC</div>
+        <div class="stat-label">{{ next_run.strftime('%Y-%m-%d') }} CST</div>
         {% else %}
         <div class="stat-value">Scheduler not running</div>
         {% endif %}
@@ -64,6 +64,10 @@
         <div class="card">
             <h3>Cooperatives</h3>
             <div class="stat-value">{{ coop_count }}</div>
+        </div>
+        <div class="card">
+            <h3>Database Size</h3>
+            <div class="stat-value">{{ "%.1f"|format(db_size_mb) }} MB</div>
         </div>
         <div class="card">
             <h3>Data Range</h3>
