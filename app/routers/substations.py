@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import Optional, List
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -9,6 +10,14 @@ from sqlalchemy import func, desc, distinct
 
 from app.database import get_db, Cooperative, SubstationSnapshot
 from app.models import SubstationSnapshotResponse, SubstationDataPoint
+
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def now_central():
+    """Get current time in Central timezone."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
+
 
 router = APIRouter(prefix="/substations", tags=["Substations"])
 
@@ -90,7 +99,7 @@ async def get_substation_history(
 
     # Time filters
     if hours:
-        start = datetime.utcnow() - timedelta(hours=hours)
+        start = now_central() - timedelta(hours=hours)
         query = query.filter(SubstationSnapshot.snapshot_time >= start)
     else:
         if start:
@@ -174,7 +183,7 @@ async def get_substation_stats(
     """Get statistics for a specific substation."""
     coop = get_cooperative_or_404(db, area_id)
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = now_central() - timedelta(hours=hours)
 
     stats = (
         db.query(

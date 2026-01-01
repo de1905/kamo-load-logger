@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime
 from typing import List
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
@@ -26,8 +27,16 @@ from app.scheduler import trigger_manual_import, get_next_run_time, restart_sche
 
 router = APIRouter()
 
+# Timezone
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
 # Track startup time
 _startup_time = time.time()
+
+
+def now_central():
+    """Get current time in Central timezone."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
 
 
 def verify_api_key(x_api_key: str = Header(None)):
@@ -43,7 +52,7 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(
         status="healthy",
-        timestamp=datetime.utcnow(),
+        timestamp=now_central(),
         version=__version__,
     )
 

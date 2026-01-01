@@ -13,7 +13,7 @@ from sqlalchemy import func
 
 from app import __version__
 from app.config import get_settings
-from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative, Setting
+from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative, Setting, now_central
 from app.scheduler import start_scheduler, stop_scheduler, import_job, get_next_run_time
 from app.services.importer import DataImporter
 from app.routers import status_router, load_router, substations_router, export_router
@@ -119,7 +119,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "next_run": next_run,
             "notifications_enabled": settings.notifications_enabled,
             "poll_interval": settings.poll_interval_minutes,
-            "now": datetime.utcnow(),
+            "now": now_central(),
         },
     )
 
@@ -220,6 +220,6 @@ async def import_history(
             "page": page,
             "total_pages": total_pages,
             "total": total,
-            "now": datetime.utcnow(),
+            "now": now_central(),
         },
     )

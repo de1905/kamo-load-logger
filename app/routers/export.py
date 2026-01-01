@@ -5,6 +5,7 @@ import io
 import json
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
@@ -12,6 +13,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db, Cooperative, LoadData, SubstationSnapshot
+
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def now_central():
+    """Get current time in Central timezone."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
+
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
@@ -53,7 +62,7 @@ async def export_load_data(
 
     # Apply filters
     if days:
-        start = datetime.utcnow() - timedelta(days=days)
+        start = now_central() - timedelta(days=days)
     if start:
         query = query.filter(LoadData.timestamp >= start)
     if end:
@@ -82,7 +91,7 @@ async def export_load_data(
         export_data = {
             "area_id": coop.id,
             "area_name": coop.name,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": now_central().isoformat(),
             "record_count": len(data),
             "data": [
                 {"timestamp": row.timestamp.isoformat(), "load_kw": row.load_kw}
@@ -118,7 +127,7 @@ async def export_substation_data(
 
     # Apply filters
     if days:
-        start = datetime.utcnow() - timedelta(days=days)
+        start = now_central() - timedelta(days=days)
     if start:
         query = query.filter(SubstationSnapshot.snapshot_time >= start)
     if end:
@@ -157,7 +166,7 @@ async def export_substation_data(
         export_data = {
             "area_id": coop.id,
             "area_name": coop.name,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": now_central().isoformat(),
             "record_count": len(data),
             "data": [
                 {

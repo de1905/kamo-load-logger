@@ -2,12 +2,22 @@
 
 from datetime import datetime, timedelta
 from typing import Optional, List
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
 from app.database import get_db, Cooperative, LoadData
+
+CENTRAL_TZ = ZoneInfo("America/Chicago")
+
+
+def now_central():
+    """Get current time in Central timezone."""
+    return datetime.now(CENTRAL_TZ).replace(tzinfo=None)
+
+
 from app.models import (
     LoadDataResponse,
     LoadDataPoint,
@@ -69,7 +79,7 @@ async def get_load_history(
 
     # Apply time filters
     if hours:
-        start = datetime.utcnow() - timedelta(hours=hours)
+        start = now_central() - timedelta(hours=hours)
         query = query.filter(LoadData.timestamp >= start)
     else:
         if start:
@@ -156,7 +166,7 @@ async def get_load_stats(
     """Get load statistics for an area."""
     coop = get_cooperative_or_404(db, area_id)
 
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = now_central() - timedelta(hours=hours)
 
     stats = (
         db.query(
