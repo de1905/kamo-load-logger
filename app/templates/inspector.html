@@ -1145,7 +1145,9 @@
 
     async function loadSubstationHistory(substationName, hours) {
         try {
-            const response = await fetch(`/api/substations/history/${currentAreaId}?substation=${encodeURIComponent(substationName)}&hours=${hours}&limit=200`);
+            // Calculate limit based on hours requested (12 data points per hour + buffer)
+            const limit = Math.ceil(hours * 15);
+            const response = await fetch(`/api/substations/history/${currentAreaId}?substation=${encodeURIComponent(substationName)}&hours=${hours}&limit=${limit}`);
             if (!response.ok) throw new Error('No data');
 
             const data = await response.json();
