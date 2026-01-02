@@ -81,7 +81,7 @@ async def get_substation_history(
     start: Optional[datetime] = Query(None, description="Start datetime"),
     end: Optional[datetime] = Query(None, description="End datetime"),
     hours: Optional[int] = Query(None, description="Last N hours"),
-    limit: int = Query(100, le=1000, description="Maximum snapshots"),
+    limit: int = Query(100, le=3000, description="Maximum snapshots"),
     db: Session = Depends(get_db),
 ):
     """
