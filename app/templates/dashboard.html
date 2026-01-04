@@ -4,45 +4,144 @@
 
 {% block extra_head %}
 <style>
+    /* Backup Section */
+    .backup-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .backup-status {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .backup-status-label {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+    }
+
+    .backup-status-value {
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
     .btn-backup {
-        margin-top: 0.75rem;
-        padding: 0.5rem 1rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
         background: var(--primary);
         color: white;
         border: none;
-        border-radius: 6px;
-        font-size: 0.75rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
-        width: 100%;
     }
 
     .btn-backup:hover:not(:disabled) {
         background: var(--primary-dark, #1d4ed8);
+        transform: translateY(-1px);
     }
 
     .btn-backup:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        transform: none;
     }
 
     .btn-backup .spinner {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 14px;
+        height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
         border-top-color: white;
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin-right: 0.5rem;
-        vertical-align: middle;
     }
 
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
 
+    /* Backup Log */
+    .backup-log-container {
+        margin-top: 1rem;
+        display: none;
+    }
+
+    .backup-log-container.active {
+        display: block;
+    }
+
+    .backup-log {
+        background: var(--gray-900);
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 0.8125rem;
+        line-height: 1.6;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .backup-log-entry {
+        color: var(--gray-300);
+        margin-bottom: 0.25rem;
+    }
+
+    .backup-log-entry.info {
+        color: var(--gray-400);
+    }
+
+    .backup-log-entry.success {
+        color: #4ade80;
+    }
+
+    .backup-log-entry.error {
+        color: #f87171;
+    }
+
+    .backup-log-entry .timestamp {
+        color: var(--gray-500);
+        margin-right: 0.5rem;
+    }
+
+    .backup-progress {
+        margin-top: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .backup-progress-bar {
+        flex: 1;
+        height: 6px;
+        background: var(--gray-200);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .backup-progress-fill {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+        width: 0%;
+    }
+
+    .backup-progress-text {
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        min-width: 3rem;
+        text-align: right;
+    }
+
+    /* Toast */
     .backup-toast {
         position: fixed;
         bottom: 2rem;
@@ -147,17 +246,40 @@
             <div class="stat-value">No data</div>
             {% endif %}
         </div>
-        <div class="card" id="backupCard">
-            <h3>Backup</h3>
-            {% if last_backup %}
-            <div class="stat-value" style="font-size: 1.25rem;">{{ last_backup.strftime('%Y-%m-%d') }}</div>
-            <div class="stat-label">{{ last_backup.strftime('%H:%M:%S') }} CST</div>
-            {% else %}
-            <div class="stat-value" style="font-size: 1.25rem;">No backups</div>
-            {% endif %}
+    </div>
+</div>
+
+<!-- Backup Section -->
+<div class="section">
+    <h2>Backup</h2>
+    <div class="card">
+        <div class="backup-header">
+            <div class="backup-status">
+                <div>
+                    <span class="backup-status-label">Last Backup:</span>
+                    <span class="backup-status-value" id="lastBackupDisplay">
+                        {% if last_backup %}
+                        {{ last_backup.strftime('%Y-%m-%d %H:%M:%S') }} CST
+                        {% else %}
+                        No backups yet
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
             <button class="btn-backup" id="backupBtn" onclick="createBackup()">
+                <span id="backupBtnIcon"></span>
                 <span id="backupBtnText">Create Backup</span>
             </button>
+        </div>
+
+        <div class="backup-log-container" id="backupLogContainer">
+            <div class="backup-progress">
+                <div class="backup-progress-bar">
+                    <div class="backup-progress-fill" id="backupProgressFill"></div>
+                </div>
+                <div class="backup-progress-text" id="backupProgressText">0%</div>
+            </div>
+            <div class="backup-log" id="backupLog"></div>
         </div>
     </div>
 </div>
@@ -243,28 +365,121 @@
 
 {% block extra_scripts %}
 <script>
-    async function createBackup() {
+    let backupInProgress = false;
+    const totalTables = 4;
+    let completedTables = 0;
+
+    function createBackup() {
+        if (backupInProgress) return;
+
+        backupInProgress = true;
+        completedTables = 0;
+
         const btn = document.getElementById('backupBtn');
+        const btnIcon = document.getElementById('backupBtnIcon');
         const btnText = document.getElementById('backupBtnText');
+        const logContainer = document.getElementById('backupLogContainer');
+        const log = document.getElementById('backupLog');
+        const progressFill = document.getElementById('backupProgressFill');
+        const progressText = document.getElementById('backupProgressText');
 
         btn.disabled = true;
-        btnText.innerHTML = '<span class="spinner"></span>Creating...';
+        btnIcon.innerHTML = '<div class="spinner"></div>';
+        btnText.textContent = 'Creating...';
+        logContainer.classList.add('active');
+        log.innerHTML = '';
+        progressFill.style.width = '0%';
+        progressText.textContent = '0%';
 
-        try {
-            const response = await fetch('/api/backups', { method: 'POST' });
-            if (!response.ok) throw new Error('Failed to create backup');
+        const eventSource = new EventSource('/api/backups/stream');
 
-            const data = await response.json();
-            showToast('Backup created successfully', 'success');
+        eventSource.addEventListener('start', (e) => {
+            const data = JSON.parse(e.data);
+            addLogEntry(data.message, 'info');
+        });
 
-            // Update the card to show new backup time
-            setTimeout(() => window.location.reload(), 1500);
-        } catch (e) {
-            console.error('Error creating backup:', e);
-            showToast('Failed to create backup', 'error');
+        eventSource.addEventListener('info', (e) => {
+            const data = JSON.parse(e.data);
+            addLogEntry(data.message, 'info');
+        });
+
+        eventSource.addEventListener('table_start', (e) => {
+            const data = JSON.parse(e.data);
+            addLogEntry(data.message);
+        });
+
+        eventSource.addEventListener('table_complete', (e) => {
+            const data = JSON.parse(e.data);
+            completedTables++;
+            const percent = Math.round((completedTables / totalTables) * 100);
+            progressFill.style.width = percent + '%';
+            progressText.textContent = percent + '%';
+            addLogEntry(data.message, 'success');
+        });
+
+        eventSource.addEventListener('progress', (e) => {
+            const data = JSON.parse(e.data);
+            addLogEntry(data.message);
+        });
+
+        eventSource.addEventListener('complete', (e) => {
+            const data = JSON.parse(e.data);
+            eventSource.close();
+            progressFill.style.width = '100%';
+            progressText.textContent = '100%';
+            addLogEntry(data.message, 'success');
+
             btn.disabled = false;
+            btnIcon.innerHTML = '';
             btnText.textContent = 'Create Backup';
-        }
+            backupInProgress = false;
+
+            // Update last backup display
+            const now = new Date();
+            document.getElementById('lastBackupDisplay').textContent =
+                now.toLocaleString('en-US', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                }).replace(',', '') + ' CST';
+
+            showToast('Backup created successfully', 'success');
+        });
+
+        eventSource.addEventListener('error', (e) => {
+            if (e.data) {
+                const data = JSON.parse(e.data);
+                addLogEntry(data.message, 'error');
+            }
+            eventSource.close();
+            btn.disabled = false;
+            btnIcon.innerHTML = '';
+            btnText.textContent = 'Create Backup';
+            backupInProgress = false;
+            showToast('Backup failed', 'error');
+        });
+
+        eventSource.onerror = () => {
+            if (backupInProgress) {
+                eventSource.close();
+                btn.disabled = false;
+                btnIcon.innerHTML = '';
+                btnText.textContent = 'Create Backup';
+                backupInProgress = false;
+            }
+        };
+    }
+
+    function addLogEntry(message, type = '') {
+        const log = document.getElementById('backupLog');
+        const entry = document.createElement('div');
+        entry.className = 'backup-log-entry ' + type;
+
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString('en-US', { hour12: false });
+
+        entry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
+        log.appendChild(entry);
+        log.scrollTop = log.scrollHeight;
     }
 
     function showToast(message, type = '') {
