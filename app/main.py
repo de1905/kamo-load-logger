@@ -17,7 +17,7 @@ from app.config import get_settings
 from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative, Setting, now_central
 from app.scheduler import start_scheduler, stop_scheduler, import_job, get_next_run_time
 from app.services.importer import DataImporter
-from app.routers import status_router, load_router, substations_router, export_router
+from app.routers import status_router, load_router, substations_router, export_router, backups_router
 
 # Configure logging
 settings = get_settings()
@@ -68,6 +68,7 @@ app.include_router(status_router, prefix="/api", tags=["Status"])
 app.include_router(load_router, prefix="/api", tags=["Load Data"])
 app.include_router(substations_router, prefix="/api", tags=["Substations"])
 app.include_router(export_router, prefix="/api", tags=["Export"])
+app.include_router(backups_router, prefix="/api", tags=["Backups"])
 
 
 # --- Web Dashboard Routes ---
@@ -227,5 +228,18 @@ async def import_history(
             "total_pages": total_pages,
             "total": total,
             "now": now_central(),
+        },
+    )
+
+
+@app.get("/backups", response_class=HTMLResponse)
+async def backups_page(request: Request):
+    """Backup management page."""
+    return templates.TemplateResponse(
+        "backups.html",
+        {
+            "request": request,
+            "version": __version__,
+            "poll_interval": settings.poll_interval_minutes,
         },
     )

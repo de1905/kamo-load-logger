@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}Backups - KAMO Load Logger{% endblock %}
+
+{% block extra_head %}
+<style>
+    .backups-container {
+        max-width: 100%;
+    }
+
+    .backups-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .backups-header h1 {
+        margin: 0;
+    }
+
+    .btn-create {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-create:hover:not(:disabled) {
+        background: var(--primary-dark, #1d4ed8);
+        transform: translateY(-1px);
+    }
+
+    .btn-create:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-create .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Backups List */
+    .backups-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .backups-card-header {
+        padding: 1rem 1.25rem;
+        background: var(--gray-50);
+        border-bottom: 1px solid var(--gray-200);
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+
+    .backups-list {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .backup-row {
+        display: flex;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--gray-100);
+        gap: 1rem;
+    }
+
+    .backup-row:last-child {
+        border-bottom: none;
+    }
+
+    .backup-row:hover {
+        background: var(--gray-50);
+    }
+
+    .backup-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .backup-filename {
+        font-weight: 500;
+        color: var(--gray-900);
+        margin-bottom: 0.25rem;
+    }
+
+    .backup-meta {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .backup-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .backup-tables {
+        font-size: 0.75rem;
+        color: var(--gray-600);
+        margin-top: 0.375rem;
+    }
+
+    .backup-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-action {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        border: 1px solid var(--gray-300);
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+        font-weight: 500;
+    }
+
+    .btn-action:hover {
+        background: var(--gray-100);
+    }
+
+    .btn-action.download {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .btn-action.download:hover {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-action.delete {
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    .btn-action.delete:hover {
+        background: var(--danger);
+        color: white;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--gray-500);
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    /* Loading State */
+    .loading-overlay {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+        color: var(--gray-500);
+    }
+
+    .loading-spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid var(--gray-200);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 0.75rem;
+    }
+
+    /* Toast notifications */
+    .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        background: var(--gray-900);
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        font-size: 0.875rem;
+        z-index: 1000;
+        opacity: 0;
+        transform: translateY(1rem);
+        transition: all 0.3s;
+    }
+
+    .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .toast.success {
+        background: var(--success);
+    }
+
+    .toast.error {
+        background: var(--danger);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="backups-container">
+    <div class="backups-header">
+        <h1>Backups</h1>
+        <button class="btn-create" id="createBtn" onclick="createBackup()">
+            <span id="createBtnText">Create Backup</span>
+        </button>
+    </div>
+
+    <div class="backups-card">
+        <div class="backups-card-header">
+            Available Backups (<span id="backupCount">0</span>)
+        </div>
+        <div class="backups-list" id="backupsList">
+            <div class="loading-overlay" id="loading">
+                <div class="loading-spinner"></div>
+                Loading backups...
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let backups = [];
+
+    async function loadBackups() {
+        const list = document.getElementById('backupsList');
+        const loading = document.getElementById('loading');
+
+        loading.style.display = 'flex';
+
+        try {
+            const response = await fetch('/api/backups');
+            if (!response.ok) throw new Error('Failed to load backups');
+
+            const data = await response.json();
+            backups = data.backups;
+
+            document.getElementById('backupCount').textContent = backups.length;
+
+            if (backups.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📦</div>
+                        <p>No backups yet</p>
+                        <p>Click "Create Backup" to generate your first backup.</p>
+                    </div>
+                `;
+            } else {
+                list.innerHTML = backups.map(backup => renderBackupRow(backup)).join('');
+            }
+        } catch (e) {
+            console.error('Error loading backups:', e);
+            list.innerHTML = '<div class="empty-state"><p style="color: var(--danger);">Error loading backups</p></div>';
+        }
+    }
+
+    function renderBackupRow(backup) {
+        const date = new Date(backup.created_at).toLocaleString();
+        const manifest = backup.manifest;
+
+        let tablesInfo = '';
+        if (manifest && manifest.tables) {
+            const tableNames = Object.keys(manifest.tables);
+            const totalRows = Object.values(manifest.tables).reduce((sum, t) => sum + t.rows, 0);
+            tablesInfo = `${tableNames.length} tables, ${totalRows.toLocaleString()} total rows`;
+        }
+
+        return `
+            <div class="backup-row">
+                <div class="backup-info">
+                    <div class="backup-filename">${backup.filename}</div>
+                    <div class="backup-meta">
+                        <span>📅 ${date}</span>
+                        <span>💾 ${backup.size_mb} MB</span>
+                    </div>
+                    ${tablesInfo ? `<div class="backup-tables">${tablesInfo}</div>` : ''}
+                </div>
+                <div class="backup-actions">
+                    <button class="btn-action download" onclick="downloadBackup('${backup.filename}')">Download</button>
+                    <button class="btn-action delete" onclick="deleteBackup('${backup.filename}')">Delete</button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function createBackup() {
+        const btn = document.getElementById('createBtn');
+        const btnText = document.getElementById('createBtnText');
+
+        btn.disabled = true;
+        btnText.innerHTML = '<div class="spinner"></div> Creating...';
+
+        try {
+            const response = await fetch('/api/backups', { method: 'POST' });
+            if (!response.ok) throw new Error('Failed to create backup');
+
+            const data = await response.json();
+            showToast('Backup created successfully', 'success');
+            loadBackups();
+        } catch (e) {
+            console.error('Error creating backup:', e);
+            showToast('Failed to create backup', 'error');
+        } finally {
+            btn.disabled = false;
+            btnText.textContent = 'Create Backup';
+        }
+    }
+
+    function downloadBackup(filename) {
+        window.location.href = `/api/backups/${filename}`;
+    }
+
+    async function deleteBackup(filename) {
+        if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/backups/${filename}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Failed to delete backup');
+
+            showToast('Backup deleted', 'success');
+            loadBackups();
+        } catch (e) {
+            console.error('Error deleting backup:', e);
+            showToast('Failed to delete backup', 'error');
+        }
+    }
+
+    function showToast(message, type = '') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'toast ' + type;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    // Load backups on page load
+    loadBackups();
+</script>
+{% endblock %}
