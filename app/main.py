@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app import __version__
+from pathlib import Path
+
 from app.config import get_settings
 from app.database import init_db, get_db, LoadData, SubstationSnapshot, ImportLog, Cooperative, Setting, now_central
 from app.scheduler import start_scheduler, stop_scheduler, import_job, get_next_run_time
@@ -107,6 +109,14 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     # Next scheduled run
     next_run = get_next_run_time()
 
+    # Last backup info
+    backup_dir = Path("data/backups")
+    last_backup = None
+    if backup_dir.exists():
+        backups = sorted(backup_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if backups:
+            last_backup = datetime.fromtimestamp(backups[0].stat().st_mtime)
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -127,6 +137,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
             "notifications_enabled": settings.notifications_enabled,
             "poll_interval": settings.poll_interval_minutes,
             "now": now_central(),
+            "last_backup": last_backup,
         },
     )
 

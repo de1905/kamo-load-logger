@@ -2,6 +2,73 @@
 
 {% block title %}Dashboard - KAMO Load Logger{% endblock %}
 
+{% block extra_head %}
+<style>
+    .btn-backup {
+        margin-top: 0.75rem;
+        padding: 0.5rem 1rem;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        width: 100%;
+    }
+
+    .btn-backup:hover:not(:disabled) {
+        background: var(--primary-dark, #1d4ed8);
+    }
+
+    .btn-backup:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-backup .spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 0.5rem;
+        vertical-align: middle;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .backup-toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        background: var(--gray-900);
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        font-size: 0.875rem;
+        z-index: 1000;
+        opacity: 0;
+        transform: translateY(1rem);
+        transition: all 0.3s;
+    }
+
+    .backup-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .backup-toast.success { background: var(--success); }
+    .backup-toast.error { background: var(--danger); }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Dashboard</h1>
 
@@ -79,6 +146,18 @@
             {% else %}
             <div class="stat-value">No data</div>
             {% endif %}
+        </div>
+        <div class="card" id="backupCard">
+            <h3>Backup</h3>
+            {% if last_backup %}
+            <div class="stat-value" style="font-size: 1.25rem;">{{ last_backup.strftime('%Y-%m-%d') }}</div>
+            <div class="stat-label">{{ last_backup.strftime('%H:%M:%S') }} CST</div>
+            {% else %}
+            <div class="stat-value" style="font-size: 1.25rem;">No backups</div>
+            {% endif %}
+            <button class="btn-backup" id="backupBtn" onclick="createBackup()">
+                <span id="backupBtnText">Create Backup</span>
+            </button>
         </div>
     </div>
 </div>
@@ -158,4 +237,45 @@
         <code>curl -X POST -H "X-API-Key: YOUR_KEY" http://localhost:8080/api/import/trigger</code>
     </div>
 </div>
+
+<div class="backup-toast" id="backupToast"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    async function createBackup() {
+        const btn = document.getElementById('backupBtn');
+        const btnText = document.getElementById('backupBtnText');
+
+        btn.disabled = true;
+        btnText.innerHTML = '<span class="spinner"></span>Creating...';
+
+        try {
+            const response = await fetch('/api/backups', { method: 'POST' });
+            if (!response.ok) throw new Error('Failed to create backup');
+
+            const data = await response.json();
+            showToast('Backup created successfully', 'success');
+
+            // Update the card to show new backup time
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (e) {
+            console.error('Error creating backup:', e);
+            showToast('Failed to create backup', 'error');
+            btn.disabled = false;
+            btnText.textContent = 'Create Backup';
+        }
+    }
+
+    function showToast(message, type = '') {
+        const toast = document.getElementById('backupToast');
+        toast.textContent = message;
+        toast.className = 'backup-toast ' + type;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+</script>
 {% endblock %}
