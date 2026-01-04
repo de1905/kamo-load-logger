@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database import get_db, SessionLocal, Cooperative, LoadData, SubstationSnapshot, ImportLog, now_central
+from app.database import get_db, get_session_local, Cooperative, LoadData, SubstationSnapshot, ImportLog, now_central
 
 router = APIRouter(prefix="/backups", tags=["Backups"])
 
@@ -178,6 +178,7 @@ async def delete_backup(filename: str):
 
 async def backup_stream_generator() -> AsyncGenerator[str, None]:
     """Generate SSE events for backup progress."""
+    SessionLocal = get_session_local()
     db = SessionLocal()
 
     try:
