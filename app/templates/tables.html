@@ -154,6 +154,29 @@
         color: var(--gray-700);
         border-bottom: 1px solid var(--gray-200);
         white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s;
+    }
+
+    .db-table th:hover {
+        background: var(--gray-200);
+    }
+
+    .db-table th .sort-indicator {
+        display: inline-block;
+        margin-left: 0.375rem;
+        opacity: 0.3;
+        font-size: 0.625rem;
+    }
+
+    .db-table th.sorted .sort-indicator {
+        opacity: 1;
+        color: var(--primary);
+    }
+
+    .db-table th.sorted {
+        color: var(--primary);
     }
 
     .db-table td {
@@ -290,10 +313,15 @@
     let currentOffset = 0;
     let currentLimit = 100;
     let totalRows = 0;
+    let currentSortBy = null;
+    let currentSortOrder = 'desc';
+    let currentColumns = [];
 
     function selectTable(tableName) {
         currentTable = tableName;
         currentOffset = 0;
+        currentSortBy = null;
+        currentSortOrder = 'desc';
 
         // Update card states
         document.querySelectorAll('.table-card').forEach(card => {
@@ -316,19 +344,29 @@
         dataTable.style.display = 'none';
 
         try {
-            const response = await fetch(`/api/tables/${currentTable}?limit=${currentLimit}&offset=${currentOffset}`);
+            let url = `/api/tables/${currentTable}?limit=${currentLimit}&offset=${currentOffset}`;
+            if (currentSortBy) {
+                url += `&sort_by=${currentSortBy}&sort_order=${currentSortOrder}`;
+            }
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to load table');
 
             const data = await response.json();
             totalRows = data.total;
+            currentColumns = data.columns;
 
             // Update header
             document.getElementById('viewerTitle').textContent = currentTable;
             document.getElementById('viewerMeta').textContent = `${totalRows.toLocaleString()} total rows`;
 
-            // Build table header
+            // Build table header with sort indicators
             const thead = document.getElementById('tableHead');
-            thead.innerHTML = `<tr>${data.columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+            thead.innerHTML = `<tr>${data.columns.map(col => {
+                const isSorted = col === currentSortBy;
+                const arrow = isSorted ? (currentSortOrder === 'asc' ? '▲' : '▼') : '▼';
+                const sortedClass = isSorted ? 'sorted' : '';
+                return `<th class="${sortedClass}" onclick="sortByColumn('${col}')">${col}<span class="sort-indicator">${arrow}</span></th>`;
+            }).join('')}</tr>`;
 
             // Build table body
             const tbody = document.getElementById('tableBody');
@@ -414,6 +452,19 @@
         if (currentTable) {
             loadTableData();
         }
+    }
+
+    function sortByColumn(column) {
+        if (currentSortBy === column) {
+            // Toggle sort order if clicking the same column
+            currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New column, default to descending
+            currentSortBy = column;
+            currentSortOrder = 'desc';
+        }
+        currentOffset = 0; // Reset to first page
+        loadTableData();
     }
 </script>
 {% endblock %}

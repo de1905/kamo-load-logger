@@ -203,9 +203,11 @@ async def get_table_data(
     table_name: str,
     limit: int = 100,
     offset: int = 0,
+    sort_by: str = None,
+    sort_order: str = "desc",
     db: Session = Depends(get_db),
 ):
-    """Get data from a specific table with pagination."""
+    """Get data from a specific table with pagination and sorting."""
     table_map = {
         "cooperatives": Cooperative,
         "load_data": LoadData,
@@ -222,8 +224,14 @@ async def get_table_data(
     # Get column names
     columns = [c.name for c in model.__table__.columns]
 
-    # Query data with ordering
-    if table_name == "cooperatives":
+    # Determine sort column and order
+    if sort_by and sort_by in columns:
+        sort_column = getattr(model, sort_by)
+        if sort_order == "asc":
+            query = db.query(model).order_by(sort_column.asc())
+        else:
+            query = db.query(model).order_by(sort_column.desc())
+    elif table_name == "cooperatives":
         query = db.query(model).order_by(model.id)
     elif table_name == "load_data":
         query = db.query(model).order_by(model.timestamp.desc())
