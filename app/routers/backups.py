@@ -2,13 +2,13 @@
 
 import asyncio
 import csv
-import io
 import json
 import os
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, AsyncGenerator
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -23,6 +23,9 @@ router = APIRouter(prefix="/backups", tags=["Backups"])
 BACKUP_DIR = Path("data/backups")
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
+# Chunk size for batched queries - small enough to not exhaust Pi RAM
+CHUNK_SIZE = 5000
+
 # Table configurations
 TABLES = {
     "cooperatives": {
@@ -31,11 +34,11 @@ TABLES = {
     },
     "load_data": {
         "model": LoadData,
-        "order_by": "timestamp",
+        "order_by": "id",  # Use id for consistent chunking
     },
     "substation_snapshots": {
         "model": SubstationSnapshot,
-        "order_by": "snapshot_time",
+        "order_by": "id",  # Use id for consistent chunking
     },
     "import_log": {
         "model": ImportLog,
@@ -66,6 +69,47 @@ def get_backup_info(filepath: Path) -> dict:
     }
 
 
+def export_table_to_csv(db: Session, model, order_by: str, csv_path: Path) -> int:
+    """Export a table to CSV file using chunked queries. Returns row count."""
+    columns = [c.name for c in model.__table__.columns]
+    order_col = getattr(model, order_by)
+
+    row_count = 0
+    offset = 0
+
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+
+        while True:
+            # Fetch chunk
+            rows = db.query(model).order_by(order_col).offset(offset).limit(CHUNK_SIZE).all()
+
+            if not rows:
+                break
+
+            for row in rows:
+                row_data = []
+                for col in columns:
+                    val = getattr(row, col)
+                    if isinstance(val, datetime):
+                        val = val.isoformat()
+                    row_data.append(val)
+                writer.writerow(row_data)
+                row_count += 1
+
+            # Clear session to free memory
+            db.expire_all()
+
+            offset += CHUNK_SIZE
+
+            # Break if we got less than chunk size (last chunk)
+            if len(rows) < CHUNK_SIZE:
+                break
+
+    return row_count
+
+
 @router.get("")
 async def list_backups():
     """List all available backups."""
@@ -83,7 +127,7 @@ async def list_backups():
 
 @router.post("")
 async def create_backup(db: Session = Depends(get_db)):
-    """Generate a new backup of all tables."""
+    """Generate a new backup of all tables using chunked queries."""
     timestamp = now_central().strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.zip"
     filepath = BACKUP_DIR / filename
@@ -93,43 +137,31 @@ async def create_backup(db: Session = Depends(get_db)):
         "tables": {},
     }
 
-    # Create zip file with CSVs
-    with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zf:
+    # Use temp directory for CSV files before zipping
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+
         for table_name, config in TABLES.items():
             model = config["model"]
-            order_col = getattr(model, config["order_by"])
+            csv_path = tmpdir_path / f"{table_name}.csv"
 
-            # Query all rows
-            rows = db.query(model).order_by(order_col).all()
+            # Export using chunked queries
+            row_count = export_table_to_csv(db, model, config["order_by"], csv_path)
 
-            # Get column names
             columns = [c.name for c in model.__table__.columns]
-
-            # Write to CSV in memory
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(columns)
-
-            for row in rows:
-                row_data = []
-                for col in columns:
-                    val = getattr(row, col)
-                    if isinstance(val, datetime):
-                        val = val.isoformat()
-                    row_data.append(val)
-                writer.writerow(row_data)
-
-            # Add CSV to zip
-            csv_content = output.getvalue()
-            zf.writestr(f"{table_name}.csv", csv_content)
-
             manifest["tables"][table_name] = {
-                "rows": len(rows),
+                "rows": row_count,
                 "columns": columns,
             }
 
-        # Add manifest
-        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        # Create zip from temp files
+        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for table_name in TABLES.keys():
+                csv_path = tmpdir_path / f"{table_name}.csv"
+                zf.write(csv_path, f"{table_name}.csv")
+
+            # Add manifest
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     return {
         "success": True,
@@ -177,9 +209,12 @@ async def delete_backup(filename: str):
 
 
 async def backup_stream_generator() -> AsyncGenerator[str, None]:
-    """Generate SSE events for backup progress."""
+    """Generate SSE events for backup progress using memory-safe chunked queries."""
     SessionLocal = get_session_local()
     db = SessionLocal()
+
+    def send_event(event_type: str, data: dict) -> str:
+        return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
     try:
         timestamp = now_central().strftime("%Y%m%d_%H%M%S")
@@ -191,13 +226,10 @@ async def backup_stream_generator() -> AsyncGenerator[str, None]:
             "tables": {},
         }
 
-        def send_event(event_type: str, data: dict) -> str:
-            return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-
         yield send_event("start", {"message": "Starting backup...", "filename": filename})
         await asyncio.sleep(0.1)
 
-        # Get row counts first
+        # Get row counts first (these are cheap COUNT queries)
         table_counts = {}
         for table_name, config in TABLES.items():
             model = config["model"]
@@ -212,12 +244,16 @@ async def backup_stream_generator() -> AsyncGenerator[str, None]:
         })
         await asyncio.sleep(0.1)
 
-        # Create zip file with CSVs
-        with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Use temp directory for CSV files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
             for table_name, config in TABLES.items():
                 model = config["model"]
-                order_col = getattr(model, config["order_by"])
                 row_count = table_counts[table_name]
+                csv_path = tmpdir_path / f"{table_name}.csv"
+                columns = [c.name for c in model.__table__.columns]
+                order_col = getattr(model, config["order_by"])
 
                 yield send_event("table_start", {
                     "table": table_name,
@@ -226,46 +262,73 @@ async def backup_stream_generator() -> AsyncGenerator[str, None]:
                 })
                 await asyncio.sleep(0.05)
 
-                # Query all rows
-                rows = db.query(model).order_by(order_col).all()
+                # Export using chunked queries
+                exported_rows = 0
+                offset = 0
 
-                # Get column names
-                columns = [c.name for c in model.__table__.columns]
+                with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(columns)
 
-                # Write to CSV in memory
-                output = io.StringIO()
-                writer = csv.writer(output)
-                writer.writerow(columns)
+                    while True:
+                        # Fetch chunk
+                        rows = db.query(model).order_by(order_col).offset(offset).limit(CHUNK_SIZE).all()
 
-                for row in rows:
-                    row_data = []
-                    for col in columns:
-                        val = getattr(row, col)
-                        if isinstance(val, datetime):
-                            val = val.isoformat()
-                        row_data.append(val)
-                    writer.writerow(row_data)
+                        if not rows:
+                            break
 
-                # Add CSV to zip
-                csv_content = output.getvalue()
-                zf.writestr(f"{table_name}.csv", csv_content)
+                        for row in rows:
+                            row_data = []
+                            for col in columns:
+                                val = getattr(row, col)
+                                if isinstance(val, datetime):
+                                    val = val.isoformat()
+                                row_data.append(val)
+                            writer.writerow(row_data)
+                            exported_rows += 1
+
+                        # Clear session to free memory
+                        db.expire_all()
+
+                        offset += CHUNK_SIZE
+
+                        # Yield progress for large tables
+                        if row_count > CHUNK_SIZE and offset % (CHUNK_SIZE * 2) == 0:
+                            pct = min(99, int(offset / row_count * 100))
+                            yield send_event("table_progress", {
+                                "table": table_name,
+                                "exported": offset,
+                                "total": row_count,
+                                "message": f"  {table_name}: {offset:,} / {row_count:,} rows ({pct}%)"
+                            })
+                            await asyncio.sleep(0.01)
+
+                        # Break if we got less than chunk size (last chunk)
+                        if len(rows) < CHUNK_SIZE:
+                            break
 
                 manifest["tables"][table_name] = {
-                    "rows": len(rows),
+                    "rows": exported_rows,
                     "columns": columns,
                 }
 
                 yield send_event("table_complete", {
                     "table": table_name,
-                    "rows": len(rows),
-                    "message": f"✓ {table_name}: {len(rows):,} rows exported"
+                    "rows": exported_rows,
+                    "message": f"✓ {table_name}: {exported_rows:,} rows exported"
                 })
                 await asyncio.sleep(0.05)
 
-            # Add manifest
-            yield send_event("progress", {"message": "Writing manifest..."})
+            # Create zip from temp files
+            yield send_event("progress", {"message": "Creating zip archive..."})
             await asyncio.sleep(0.05)
-            zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+
+            with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for table_name in TABLES.keys():
+                    csv_path = tmpdir_path / f"{table_name}.csv"
+                    zf.write(csv_path, f"{table_name}.csv")
+
+                zf.writestr("manifest.json", json.dumps(manifest, indent=2))
 
         backup_info = get_backup_info(filepath)
         yield send_event("complete", {
