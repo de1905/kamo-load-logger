@@ -274,29 +274,29 @@
         color: var(--gray-500);
     }
 
-    .substation-kw {
-        color: var(--primary);
-        font-weight: 500;
-    }
-
-    .substation-stats {
-        text-align: right;
-    }
-
     .substation-pf {
-        font-size: 1.125rem;
-        font-weight: 600;
-    }
-
-    .substation-pf-label {
-        font-size: 0.625rem;
-        color: var(--gray-500);
-        text-transform: uppercase;
+        font-weight: 500;
     }
 
     .pf-good { color: var(--success); }
     .pf-warning { color: var(--warning); }
     .pf-bad { color: var(--danger); }
+
+    .substation-stats {
+        text-align: right;
+    }
+
+    .substation-load {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--primary);
+    }
+
+    .substation-load-label {
+        font-size: 0.625rem;
+        color: var(--gray-500);
+        text-transform: uppercase;
+    }
 
     .substation-row {
         cursor: pointer;
@@ -1036,13 +1036,13 @@
                 <div class="substation-info">
                     <div class="substation-name">${sub.substation_name}</div>
                     <div class="substation-details">
-                        <span class="substation-kw">${formatLoad(sub.kw)}</span>
+                        <span class="substation-pf ${pfClass}">PF ${pf.toFixed(2)}</span>
                         <span>${sub.kvar.toFixed(0)} kVAR</span>
                     </div>
                 </div>
                 <div class="substation-stats">
-                    <div class="substation-pf ${pfClass}">${pf.toFixed(2)}</div>
-                    <div class="substation-pf-label">PF</div>
+                    <div class="substation-load">${formatLoad(sub.kw)}</div>
+                    <div class="substation-load-label">Load</div>
                 </div>
                 <span class="chevron">&#9654;</span>
             </div>
