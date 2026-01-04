@@ -34,11 +34,10 @@ RUN pip install --no-cache /wheels/*
 COPY app/ ./app/
 COPY scripts/ ./scripts/
 
-# Make scripts executable
-RUN chmod +x ./scripts/*.sh
-
-# Create data directory
-RUN mkdir -p /app/data/backups && chown -R appuser:appuser /app/data
+# Make scripts executable and fix ownership
+RUN chmod +x ./scripts/*.sh \
+    && mkdir -p /app/data/backups \
+    && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
